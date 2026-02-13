@@ -104,7 +104,7 @@ function App() {
       <Sidebar items={NAV_ITEMS} active={activePage} onSelect={setActivePage} />
       <Topbar user={session.user} onLogout={handleLogout} />
       <main className="app-main">
-        <ActivePage />
+        <ActivePage session={session} />
       </main>
     </div>
   )
