@@ -10,7 +10,7 @@
   background:
     radial-gradient(circle at 14% 22%, rgba(255, 255, 255, 0.22), transparent 40%),
     radial-gradient(circle at 80% 80%, rgba(255, 255, 255, 0.15), transparent 30%),
-    linear-gradient(140deg, #083b52 0%, #0b4f6c 48%, #4f8fab 100%);
+    linear-gradient(140deg, #006689 0%, #00a0d8 48%, #67c8eb 100%);
   color: #f2f8fc;
   display: flex;
   flex-direction: column;
@@ -80,6 +80,13 @@
 .login-card-header {
   display: grid;
   gap: 8px;
+}
+
+.login-logo {
+  width: 78px;
+  height: 78px;
+  object-fit: contain;
+  justify-self: center;
 }
 
 .login-title {
@@ -158,16 +165,11 @@
   border-bottom: 1px solid var(--border);
 }
 
-.brand-mark {
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
-  background: linear-gradient(135deg, var(--primary), var(--primary-strong));
-  color: #fff;
-  display: grid;
-  place-items: center;
-  font-weight: 700;
-  letter-spacing: 0.5px;
+.brand-logo {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+  flex-shrink: 0;
 }
 
 .brand-title {
@@ -344,7 +346,7 @@
 .app-main {
   grid-column: 2;
   padding: 28px;
-  background: radial-gradient(circle at top left, rgba(11, 79, 108, 0.08), transparent 55%);
+  background: radial-gradient(circle at top left, rgba(0, 160, 216, 0.12), transparent 55%);
 }
 
 .page {
@@ -501,7 +503,7 @@
 
 .chart-bar {
   height: 100%;
-  background: linear-gradient(90deg, var(--primary), #4f8fab);
+  background: linear-gradient(90deg, var(--primary), #67c8eb);
   position: relative;
   display: flex;
   align-items: center;
@@ -752,8 +754,8 @@
 }
 
 .progress-step.is-active {
-  background: rgba(11, 79, 108, 0.08);
-  border-color: rgba(11, 79, 108, 0.4);
+  background: rgba(0, 160, 216, 0.1);
+  border-color: rgba(0, 160, 216, 0.4);
 }
 
 .progress-step.is-active span {
@@ -787,6 +789,39 @@
 
 .form-field-full {
   grid-column: 1 / -1;
+}
+
+.parent-section {
+  gap: 12px;
+}
+
+.parent-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.parent-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.parent-card {
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  display: grid;
+  gap: 8px;
+}
+
+.parent-title {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
 }
 
 .tabs {
@@ -883,7 +918,7 @@
 .tag {
   padding: 6px 12px;
   border-radius: 999px;
-  background: rgba(11, 79, 108, 0.1);
+  background: rgba(0, 160, 216, 0.12);
   color: var(--primary-strong);
   font-size: 0.8rem;
   font-weight: 600;
