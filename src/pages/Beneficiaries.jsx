@@ -30,16 +30,46 @@ const getAgeGroup = (age) => {
 
 const steps = ['Personal information', 'Health and disability', 'Education', 'Consent']
 
-const EMPTY_FORM = {
+const createEmptyParentContact = () => ({
+  relationship: '',
+  fullName: '',
+  phoneNumber: '',
+  isApamMember: '',
+  parentMemberCode: '',
+})
+
+const createEmptyForm = () => ({
   fullName: '',
   gender: '',
   dateOfBirth: '',
+  nationalId: '',
+  phoneNumber: '',
+  alternativeContact: '',
   district: '',
+  traditionalAuthority: '',
+  villageArea: '',
+  isRegisteredApamMember: '',
+  maritalStatus: '',
+  isMarriedToFellowMember: '',
+  spouseMemberCode: '',
+  spouseFullName: '',
+  spousePhoneNumber: '',
+  parentContacts: [createEmptyParentContact()],
   educationLevel: '',
   employmentStatus: '',
   healthConditions: '',
   disabilityStatus: '',
   assistiveDevices: '',
+  hasAdditionalDisability: '',
+  additionalDisabilityDetails: '',
+  assistiveDeviceUsage: '',
+  discriminationInEducationOrEmployment: '',
+  skinCancerDiagnosis: '',
+  skinCancerType: '',
+  skinCancerStage: '',
+  currentlyReceivingTreatment: '',
+  treatmentLocation: '',
+  needsSupportAccessingTreatment: '',
   primaryCaregiver: '',
   literacyLevel: '',
   currentTraining: '',
@@ -47,7 +77,7 @@ const EMPTY_FORM = {
   consentStatus: '',
   dataSharingConsent: '',
   notes: '',
-}
+})
 
 const DEFAULT_FILTERS = {
   location: 'All',
@@ -129,7 +159,7 @@ export default function Beneficiaries({ session }) {
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [activeMember, setActiveMember] = useState(null)
-  const [formValues, setFormValues] = useState(EMPTY_FORM)
+  const [formValues, setFormValues] = useState(() => createEmptyForm())
 
   const authHeader = useMemo(() => {
     const token = session?.accessToken
@@ -317,31 +347,137 @@ export default function Beneficiaries({ session }) {
     member.consentStatus?.toLowerCase().includes('pending'),
   ).length
 
+  const memberAge = useMemo(() => calculateAge(formValues.dateOfBirth), [formValues.dateOfBirth])
+  const isMinor = typeof memberAge === 'number' && memberAge < 18
+  const isMarried = formValues.maritalStatus === 'Married'
+  const isMarriedToFellowMember = isMarried && formValues.isMarriedToFellowMember === 'Yes'
+
   const updateField = (field) => (event) => {
     const { value } = event.target
-    setFormValues((prev) => ({ ...prev, [field]: value }))
+    setFormValues((prev) => {
+      const next = { ...prev, [field]: value }
+
+      if (field === 'hasAdditionalDisability' && value !== 'Yes') {
+        next.additionalDisabilityDetails = ''
+      }
+
+      if (field === 'skinCancerDiagnosis' && value !== 'Yes') {
+        next.skinCancerType = ''
+        next.skinCancerStage = ''
+        next.currentlyReceivingTreatment = ''
+        next.treatmentLocation = ''
+        next.needsSupportAccessingTreatment = ''
+      }
+
+      if (field === 'currentlyReceivingTreatment' && value !== 'Yes') {
+        next.treatmentLocation = ''
+      }
+
+      if (field === 'maritalStatus' && value !== 'Married') {
+        next.isMarriedToFellowMember = ''
+        next.spouseMemberCode = ''
+        next.spouseFullName = ''
+        next.spousePhoneNumber = ''
+      }
+
+      if (field === 'isMarriedToFellowMember' && value !== 'Yes') {
+        next.spouseMemberCode = ''
+        next.spouseFullName = ''
+        next.spousePhoneNumber = ''
+      }
+
+      return next
+    })
+  }
+
+  const updateParentContact = (index, field) => (event) => {
+    const { value } = event.target
+    setFormValues((prev) => {
+      const parentContacts = prev.parentContacts.map((parent, currentIndex) =>
+        currentIndex === index ? { ...parent, [field]: value } : parent,
+      )
+
+      if (field === 'isApamMember' && value !== 'Yes') {
+        parentContacts[index].parentMemberCode = ''
+      }
+
+      return { ...prev, parentContacts }
+    })
+  }
+
+  const addParentContact = () => {
+    setFormValues((prev) => {
+      if (prev.parentContacts.length >= 2) {
+        return prev
+      }
+
+      return { ...prev, parentContacts: [...prev.parentContacts, createEmptyParentContact()] }
+    })
+  }
+
+  const removeParentContact = (index) => {
+    setFormValues((prev) => {
+      if (prev.parentContacts.length <= 1) {
+        return { ...prev, parentContacts: [createEmptyParentContact()] }
+      }
+
+      return { ...prev, parentContacts: prev.parentContacts.filter((_, currentIndex) => currentIndex !== index) }
+    })
   }
 
   const handleAddMember = () => {
     setActiveMember(null)
-    setFormValues(EMPTY_FORM)
+    setFormValues(createEmptyForm())
     setSaveError('')
     setStepIndex(0)
     setIsModalOpen(true)
   }
 
   function handleEditMember(member) {
+    const parentContacts =
+      member.parentContacts?.length > 0
+        ? member.parentContacts.map((parent) => ({
+            relationship: parent.relationship ?? '',
+            fullName: parent.fullName ?? '',
+            phoneNumber: parent.phoneNumber ?? '',
+            isApamMember: parent.isApamMember ?? '',
+            parentMemberCode: parent.parentMemberCode ?? '',
+          }))
+        : [createEmptyParentContact()]
+
     setActiveMember(member)
     setFormValues({
       fullName: member.fullName ?? '',
       gender: member.gender ?? '',
       dateOfBirth: formatDateForInput(member.dateOfBirth),
+      nationalId: member.nationalId ?? '',
+      phoneNumber: member.phoneNumber ?? '',
+      alternativeContact: member.alternativeContact ?? '',
       district: member.district ?? '',
+      traditionalAuthority: member.traditionalAuthority ?? '',
+      villageArea: member.villageArea ?? '',
+      isRegisteredApamMember: member.isRegisteredApamMember ?? '',
+      maritalStatus: member.maritalStatus ?? '',
+      isMarriedToFellowMember: member.isMarriedToFellowMember ?? '',
+      spouseMemberCode: member.spouseMemberCode ?? '',
+      spouseFullName: member.spouseFullName ?? '',
+      spousePhoneNumber: member.spousePhoneNumber ?? '',
+      parentContacts,
       educationLevel: member.educationLevel ?? '',
       employmentStatus: member.employmentStatus ?? '',
       healthConditions: member.healthConditions ?? '',
       disabilityStatus: member.disabilityStatus ?? '',
       assistiveDevices: member.assistiveDevices ?? '',
+      hasAdditionalDisability: member.hasAdditionalDisability ?? '',
+      additionalDisabilityDetails: member.additionalDisabilityDetails ?? '',
+      assistiveDeviceUsage: member.assistiveDeviceUsage ?? '',
+      discriminationInEducationOrEmployment: member.discriminationInEducationOrEmployment ?? '',
+      skinCancerDiagnosis: member.skinCancerDiagnosis ?? '',
+      skinCancerType: member.skinCancerType ?? '',
+      skinCancerStage: member.skinCancerStage ?? '',
+      currentlyReceivingTreatment: member.currentlyReceivingTreatment ?? '',
+      treatmentLocation: member.treatmentLocation ?? '',
+      needsSupportAccessingTreatment: member.needsSupportAccessingTreatment ?? '',
       primaryCaregiver: member.primaryCaregiver ?? '',
       literacyLevel: member.literacyLevel ?? '',
       currentTraining: member.currentTraining ?? '',
@@ -360,16 +496,61 @@ export default function Beneficiaries({ session }) {
     setSaveError('')
 
     try {
+      const hasKnownAge = typeof memberAge === 'number'
+      const parentContacts = isMinor
+        ? formValues.parentContacts
+            .map((parent) => ({
+              relationship: parent.relationship.trim() || null,
+              fullName: parent.fullName.trim() || null,
+              phoneNumber: parent.phoneNumber.trim() || null,
+              isApamMember: parent.isApamMember || null,
+              parentMemberCode: parent.parentMemberCode.trim() || null,
+            }))
+            .filter(
+              (parent) =>
+                parent.fullName ||
+                parent.relationship ||
+                parent.phoneNumber ||
+                parent.isApamMember ||
+                parent.parentMemberCode,
+            )
+        : hasKnownAge
+          ? []
+          : null
+
       const payload = {
         fullName: formValues.fullName.trim(),
         gender: formValues.gender.trim(),
         dateOfBirth: formValues.dateOfBirth ? formValues.dateOfBirth : null,
+        nationalId: formValues.nationalId.trim() || null,
+        phoneNumber: formValues.phoneNumber.trim() || null,
+        alternativeContact: formValues.alternativeContact.trim() || null,
         district: formValues.district.trim(),
+        traditionalAuthority: formValues.traditionalAuthority.trim() || null,
+        villageArea: formValues.villageArea.trim() || null,
+        isRegisteredApamMember: formValues.isRegisteredApamMember || null,
+        maritalStatus: formValues.maritalStatus || null,
+        isMarriedToFellowMember: formValues.isMarriedToFellowMember || null,
+        spouseMemberCode: formValues.spouseMemberCode.trim() || null,
+        spouseFullName: formValues.spouseFullName.trim() || null,
+        spousePhoneNumber: formValues.spousePhoneNumber.trim() || null,
+        parentContacts,
         educationLevel: formValues.educationLevel || null,
         employmentStatus: formValues.employmentStatus || null,
         healthConditions: formValues.healthConditions || null,
         disabilityStatus: formValues.disabilityStatus || null,
         assistiveDevices: formValues.assistiveDevices || null,
+        hasAdditionalDisability: formValues.hasAdditionalDisability || null,
+        additionalDisabilityDetails: formValues.additionalDisabilityDetails || null,
+        assistiveDeviceUsage: formValues.assistiveDeviceUsage || null,
+        discriminationInEducationOrEmployment:
+          formValues.discriminationInEducationOrEmployment || null,
+        skinCancerDiagnosis: formValues.skinCancerDiagnosis || null,
+        skinCancerType: formValues.skinCancerType || null,
+        skinCancerStage: formValues.skinCancerStage || null,
+        currentlyReceivingTreatment: formValues.currentlyReceivingTreatment || null,
+        treatmentLocation: formValues.treatmentLocation || null,
+        needsSupportAccessingTreatment: formValues.needsSupportAccessingTreatment || null,
         primaryCaregiver: formValues.primaryCaregiver || null,
         literacyLevel: formValues.literacyLevel || null,
         currentTraining: formValues.currentTraining || null,
@@ -400,7 +581,7 @@ export default function Beneficiaries({ session }) {
 
       setIsModalOpen(false)
       setActiveMember(null)
-      setFormValues(EMPTY_FORM)
+      setFormValues(createEmptyForm())
       setStepIndex(0)
       await fetchMembers()
     } catch (error) {
@@ -410,10 +591,14 @@ export default function Beneficiaries({ session }) {
     }
   }
 
+  const hasParentInfoForMinor =
+    !isMinor || formValues.parentContacts.some((parent) => parent.fullName.trim().length > 0)
+
   const canSave =
     formValues.fullName.trim().length > 0 &&
     formValues.gender.trim().length > 0 &&
-    formValues.district.trim().length > 0
+    formValues.district.trim().length > 0 &&
+    hasParentInfoForMinor
 
   const stepContent = () => {
     switch (stepIndex) {
@@ -430,12 +615,11 @@ export default function Beneficiaries({ session }) {
               />
             </label>
             <label className="form-field">
-              <span>Gender</span>
+              <span>Sex</span>
               <select value={formValues.gender} onChange={updateField('gender')}>
-                <option value="">Select gender</option>
+                <option value="">Select sex</option>
                 <option>Female</option>
                 <option>Male</option>
-                <option>Other</option>
               </select>
             </label>
             <label className="form-field">
@@ -447,7 +631,38 @@ export default function Beneficiaries({ session }) {
               />
             </label>
             <label className="form-field">
-              <span>District</span>
+              <span>Age</span>
+              <input type="text" value={memberAge ?? ''} placeholder="Auto from date of birth" disabled />
+            </label>
+            <label className="form-field">
+              <span>National ID (optional)</span>
+              <input
+                type="text"
+                placeholder="Enter national ID"
+                value={formValues.nationalId}
+                onChange={updateField('nationalId')}
+              />
+            </label>
+            <label className="form-field">
+              <span>Phone number</span>
+              <input
+                type="text"
+                placeholder="Enter phone number"
+                value={formValues.phoneNumber}
+                onChange={updateField('phoneNumber')}
+              />
+            </label>
+            <label className="form-field">
+              <span>Alternative contact</span>
+              <input
+                type="text"
+                placeholder="Alternative phone or contact"
+                value={formValues.alternativeContact}
+                onChange={updateField('alternativeContact')}
+              />
+            </label>
+            <label className="form-field">
+              <span>District of residence</span>
               <select value={formValues.district} onChange={updateField('district')}>
                 <option value="">Select district</option>
                 <option>North</option>
@@ -455,48 +670,287 @@ export default function Beneficiaries({ session }) {
                 <option>South</option>
               </select>
             </label>
+            <label className="form-field">
+              <span>Traditional authority</span>
+              <input
+                type="text"
+                placeholder="Enter traditional authority"
+                value={formValues.traditionalAuthority}
+                onChange={updateField('traditionalAuthority')}
+              />
+            </label>
+            <label className="form-field">
+              <span>Village/Area</span>
+              <input
+                type="text"
+                placeholder="Enter village or area"
+                value={formValues.villageArea}
+                onChange={updateField('villageArea')}
+              />
+            </label>
+            <label className="form-field">
+              <span>Are you a registered APAM member?</span>
+              <select value={formValues.isRegisteredApamMember} onChange={updateField('isRegisteredApamMember')}>
+                <option value="">Select response</option>
+                <option>Yes</option>
+                <option>No</option>
+              </select>
+            </label>
+            <label className="form-field">
+              <span>Marital status</span>
+              <select value={formValues.maritalStatus} onChange={updateField('maritalStatus')}>
+                <option value="">Select status</option>
+                <option>Single</option>
+                <option>Married</option>
+                <option>Separated</option>
+                <option>Divorced</option>
+                <option>Widowed</option>
+              </select>
+            </label>
+            {isMarried ? (
+              <label className="form-field">
+                <span>Married to a fellow APAM member?</span>
+                <select
+                  value={formValues.isMarriedToFellowMember}
+                  onChange={updateField('isMarriedToFellowMember')}
+                >
+                  <option value="">Select response</option>
+                  <option>Yes</option>
+                  <option>No</option>
+                </select>
+              </label>
+            ) : null}
+            {isMarriedToFellowMember ? (
+              <>
+                <label className="form-field">
+                  <span>Spouse member code</span>
+                  <input
+                    type="text"
+                    placeholder="Example: BEN-00012"
+                    value={formValues.spouseMemberCode}
+                    onChange={updateField('spouseMemberCode')}
+                  />
+                </label>
+                <label className="form-field">
+                  <span>Spouse full name</span>
+                  <input
+                    type="text"
+                    placeholder="Enter spouse full name"
+                    value={formValues.spouseFullName}
+                    onChange={updateField('spouseFullName')}
+                  />
+                </label>
+                <label className="form-field">
+                  <span>Spouse phone number</span>
+                  <input
+                    type="text"
+                    placeholder="Enter spouse phone number"
+                    value={formValues.spousePhoneNumber}
+                    onChange={updateField('spousePhoneNumber')}
+                  />
+                </label>
+              </>
+            ) : null}
+            {isMinor ? (
+              <div className="form-field form-field-full parent-section">
+                <div className="parent-section-header">
+                  <div>
+                    <span>Parent/guardian information (required for members under 18)</span>
+                    <p className="table-meta">Current age: {memberAge}</p>
+                  </div>
+                  {formValues.parentContacts.length < 2 ? (
+                    <Button type="button" variant="outline" size="sm" onClick={addParentContact}>
+                      Add second parent
+                    </Button>
+                  ) : null}
+                </div>
+                <div className="parent-grid">
+                  {formValues.parentContacts.map((parent, index) => (
+                    <div className="parent-card" key={`parent-contact-${index}`}>
+                      <p className="parent-title">Parent/Guardian {index + 1}</p>
+                      <label className="form-field">
+                        <span>Relationship</span>
+                        <select
+                          value={parent.relationship}
+                          onChange={updateParentContact(index, 'relationship')}
+                        >
+                          <option value="">Select relationship</option>
+                          <option>Mother</option>
+                          <option>Father</option>
+                          <option>Guardian</option>
+                          <option>Other</option>
+                        </select>
+                      </label>
+                      <label className="form-field">
+                        <span>Full name</span>
+                        <input
+                          type="text"
+                          placeholder="Enter parent/guardian full name"
+                          value={parent.fullName}
+                          onChange={updateParentContact(index, 'fullName')}
+                        />
+                      </label>
+                      <label className="form-field">
+                        <span>Phone number</span>
+                        <input
+                          type="text"
+                          placeholder="Enter phone number"
+                          value={parent.phoneNumber}
+                          onChange={updateParentContact(index, 'phoneNumber')}
+                        />
+                      </label>
+                      <label className="form-field">
+                        <span>Is this parent an APAM member?</span>
+                        <select value={parent.isApamMember} onChange={updateParentContact(index, 'isApamMember')}>
+                          <option value="">Select response</option>
+                          <option>Yes</option>
+                          <option>No</option>
+                        </select>
+                      </label>
+                      {parent.isApamMember === 'Yes' ? (
+                        <label className="form-field">
+                          <span>Parent member code</span>
+                          <input
+                            type="text"
+                            placeholder="Example: BEN-00021"
+                            value={parent.parentMemberCode}
+                            onChange={updateParentContact(index, 'parentMemberCode')}
+                          />
+                        </label>
+                      ) : null}
+                      {formValues.parentContacts.length > 1 ? (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removeParentContact(index)}
+                        >
+                          Remove
+                        </Button>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
           </div>
         )
       case 1:
         return (
           <div className="form-grid">
             <label className="form-field">
-              <span>Health conditions</span>
-              <input
-                type="text"
-                placeholder="List any health conditions"
-                value={formValues.healthConditions}
-                onChange={updateField('healthConditions')}
-              />
+              <span>Any additional disability besides albinism?</span>
+              <select
+                value={formValues.hasAdditionalDisability}
+                onChange={updateField('hasAdditionalDisability')}
+              >
+                <option value="">Select response</option>
+                <option>Yes</option>
+                <option>No</option>
+              </select>
             </label>
+            {formValues.hasAdditionalDisability === 'Yes' ? (
+              <label className="form-field">
+                <span>If yes, specify</span>
+                <input
+                  type="text"
+                  placeholder="Enter disability details"
+                  value={formValues.additionalDisabilityDetails}
+                  onChange={updateField('additionalDisabilityDetails')}
+                />
+              </label>
+            ) : null}
             <label className="form-field">
-              <span>Disability status</span>
-              <select value={formValues.disabilityStatus} onChange={updateField('disabilityStatus')}>
-                <option value="">Select status</option>
-                <option>No disability</option>
-                <option>Visual</option>
-                <option>Hearing</option>
-                <option>Mobility</option>
+              <span>Do you use any assistive devices?</span>
+              <select value={formValues.assistiveDeviceUsage} onChange={updateField('assistiveDeviceUsage')}>
+                <option value="">Select response</option>
+                <option>None</option>
+                <option>Glasses</option>
+                <option>Magnifier</option>
+                <option>White cane</option>
+                <option>Others</option>
               </select>
             </label>
             <label className="form-field">
-              <span>Assistive devices needed</span>
-              <input
-                type="text"
-                placeholder="Wheelchair, hearing aid, etc."
-                value={formValues.assistiveDevices}
-                onChange={updateField('assistiveDevices')}
-              />
+              <span>Do you face discrimination in education or employment?</span>
+              <select
+                value={formValues.discriminationInEducationOrEmployment}
+                onChange={updateField('discriminationInEducationOrEmployment')}
+              >
+                <option value="">Select response</option>
+                <option>Often</option>
+                <option>Some</option>
+                <option>Never</option>
+              </select>
             </label>
             <label className="form-field">
-              <span>Primary caregiver</span>
-              <input
-                type="text"
-                placeholder="Name of caregiver"
-                value={formValues.primaryCaregiver}
-                onChange={updateField('primaryCaregiver')}
-              />
+              <span>Diagnosed with skin cancer by a health professional?</span>
+              <select value={formValues.skinCancerDiagnosis} onChange={updateField('skinCancerDiagnosis')}>
+                <option value="">Select response</option>
+                <option>Yes</option>
+                <option>No</option>
+                <option>Not sure</option>
+              </select>
             </label>
+            {formValues.skinCancerDiagnosis === 'Yes' ? (
+              <>
+                <label className="form-field">
+                  <span>If yes, type of skin cancer (if known)</span>
+                  <select value={formValues.skinCancerType} onChange={updateField('skinCancerType')}>
+                    <option value="">Select type</option>
+                    <option>Squamous cell</option>
+                    <option>Carcinoma</option>
+                    <option>Melanoma</option>
+                    <option>Other</option>
+                    <option>Don't know</option>
+                  </select>
+                </label>
+                <label className="form-field">
+                  <span>Level/stage of skin cancer (if known)</span>
+                  <select value={formValues.skinCancerStage} onChange={updateField('skinCancerStage')}>
+                    <option value="">Select stage</option>
+                    <option>Early stage</option>
+                    <option>Moderate</option>
+                    <option>Advanced</option>
+                    <option>Recurrent</option>
+                    <option>Don't know</option>
+                  </select>
+                </label>
+                <label className="form-field">
+                  <span>Are you currently receiving treatment?</span>
+                  <select
+                    value={formValues.currentlyReceivingTreatment}
+                    onChange={updateField('currentlyReceivingTreatment')}
+                  >
+                    <option value="">Select response</option>
+                    <option>Yes</option>
+                    <option>No</option>
+                  </select>
+                </label>
+                {formValues.currentlyReceivingTreatment === 'Yes' ? (
+                  <label className="form-field">
+                    <span>If yes, where are you receiving treatment?</span>
+                    <input
+                      type="text"
+                      placeholder="Hospital or clinic name"
+                      value={formValues.treatmentLocation}
+                      onChange={updateField('treatmentLocation')}
+                    />
+                  </label>
+                ) : null}
+                <label className="form-field">
+                  <span>Do you need support accessing treatment?</span>
+                  <select
+                    value={formValues.needsSupportAccessingTreatment}
+                    onChange={updateField('needsSupportAccessingTreatment')}
+                  >
+                    <option value="">Select response</option>
+                    <option>Yes</option>
+                    <option>No</option>
+                  </select>
+                </label>
+              </>
+            ) : null}
           </div>
         )
       case 2:
