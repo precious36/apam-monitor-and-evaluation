@@ -1,10 +1,11 @@
-﻿import Button from './Button'
+import Button from './Button'
+import apamLogo from '../assets/apam-logo.png'
 
 export default function Sidebar({ items, active, onSelect }) {
   return (
     <aside className="sidebar">
       <div className="sidebar-brand">
-        <div className="brand-mark">M&E</div>
+        <img className="brand-logo" src={apamLogo} alt="APAM logo" />
         <div>
           <p className="brand-title">APAM Monitoring</p>
           <p className="brand-subtitle">Evaluation System</p>
