@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import Button from '../components/Button'
+import apamLogo from '../assets/apam-logo.png'
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '')
 
@@ -84,6 +85,7 @@ export default function Login({ onLogin }) {
       <section className="login-panel">
         <div className="login-card">
           <div className="login-card-header">
+            <img className="login-logo" src={apamLogo} alt="APAM logo" />
             <p className="eyebrow">Secure access</p>
             <h2 className="login-title">Sign in to APAM M&E</h2>
             <p className="login-subtitle">Use your assigned account credentials to continue.</p>
