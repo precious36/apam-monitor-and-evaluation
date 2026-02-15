@@ -1,9 +1,26 @@
-﻿const STATUS_MAP = {
-  Critical: 'status-critical',
-  Ongoing: 'status-ongoing',
-  Closed: 'status-closed',
+const STATUS_MAP = {
+  critical: 'status-critical',
+  ongoing: 'status-ongoing',
+  closed: 'status-closed',
+  underinvestigation: 'status-under-investigation',
+  arrestmade: 'status-arrest-made',
+  noarrestmade: 'status-no-arrest-made',
+  caseonhearingstage: 'status-hearing-stage',
+  sentenced: 'status-sentenced',
+  acquitted: 'status-acquitted',
 }
 
+const normalizeStatusToken = (value) =>
+  String(value ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '')
+
 export default function StatusPill({ value }) {
-  return <span className={`status-pill ${STATUS_MAP[value] || ''}`}>{value}</span>
+  const statusLabel = String(value ?? '').trim() || 'Unknown'
+  return (
+    <span className={`status-pill ${STATUS_MAP[normalizeStatusToken(statusLabel)] || ''}`}>
+      {statusLabel}
+    </span>
+  )
 }

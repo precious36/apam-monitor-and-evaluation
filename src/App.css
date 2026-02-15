@@ -114,6 +114,60 @@
   font-size: 0.88rem;
 }
 
+.notify-stack {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 1000;
+  display: grid;
+  gap: 10px;
+  width: min(360px, calc(100vw - 24px));
+}
+
+.notify {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  padding: 10px 12px;
+}
+
+.notify p {
+  margin: 0;
+  font-size: 0.88rem;
+}
+
+.notify-success {
+  border-color: rgba(46, 125, 50, 0.35);
+  background: rgba(46, 125, 50, 0.08);
+  color: #2e7d32;
+}
+
+.notify-error {
+  border-color: rgba(176, 68, 42, 0.35);
+  background: rgba(176, 68, 42, 0.1);
+  color: var(--danger);
+}
+
+.notify-info {
+  border-color: rgba(0, 102, 137, 0.35);
+  background: rgba(0, 102, 137, 0.1);
+  color: #006689;
+}
+
+.notify-close {
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+  text-transform: uppercase;
+}
+
 .alert {
   margin: 0 0 12px;
   padding: 10px 12px;
@@ -1026,6 +1080,10 @@
   gap: 18px;
 }
 
+.cases-layout-single {
+  grid-template-columns: 1fr;
+}
+
 .case-detail {
   display: grid;
   gap: 18px;
@@ -1081,6 +1139,36 @@
 .status-closed {
   background: rgba(46, 125, 50, 0.2);
   color: #2e7d32;
+}
+
+.status-under-investigation {
+  background: rgba(0, 96, 128, 0.18);
+  color: #005f7f;
+}
+
+.status-arrest-made {
+  background: rgba(46, 125, 50, 0.2);
+  color: #2e7d32;
+}
+
+.status-no-arrest-made {
+  background: rgba(219, 166, 0, 0.2);
+  color: #a86b00;
+}
+
+.status-hearing-stage {
+  background: rgba(219, 166, 0, 0.2);
+  color: #a86b00;
+}
+
+.status-sentenced {
+  background: rgba(46, 125, 50, 0.2);
+  color: #2e7d32;
+}
+
+.status-acquitted {
+  background: rgba(96, 125, 139, 0.2);
+  color: #455a64;
 }
 
 .member-status {

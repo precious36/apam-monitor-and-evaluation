@@ -9,6 +9,7 @@ import Cases from './pages/Cases'
 import Reports from './pages/Reports'
 import UsersSettings from './pages/UsersSettings'
 import Login from './pages/Login'
+import { useNotify } from './hooks/useNotify'
 
 const AUTH_STORAGE_KEY = 'apam.me.auth'
 
@@ -81,6 +82,7 @@ function clearSession() {
 }
 
 function App() {
+  const notify = useNotify()
   const [session, setSession] = useState(readStoredSession)
   const [activePage, setActivePage] = useState('Dashboard')
   const ActivePage = useMemo(() => PAGE_COMPONENTS[activePage], [activePage])
@@ -93,6 +95,7 @@ function App() {
   function handleLogout() {
     clearSession()
     setSession(null)
+    notify.success('Signed out successfully.')
   }
 
   if (!session) {
