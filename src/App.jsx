@@ -1,9 +1,9 @@
-import { useMemo, useState } from 'react'
+﻿import { useMemo, useState } from 'react'
 import './App.css'
 import Sidebar from './components/Sidebar'
 import Topbar from './components/Topbar'
 import Dashboard from './pages/Dashboard'
-import Beneficiaries from './pages/Beneficiaries'
+import Members from './pages/Members'
 import SkillsLivelihoods from './pages/SkillsLivelihoods'
 import Cases from './pages/Cases'
 import Reports from './pages/Reports'
@@ -23,7 +23,7 @@ const NAV_ITEMS = [
 
 const PAGE_COMPONENTS = {
   Dashboard,
-  Members: Beneficiaries,
+  Members,
   'Skills & Livelihoods': SkillsLivelihoods,
   Cases,
   Reports,
@@ -111,3 +111,4 @@ function App() {
 }
 
 export default App
+
