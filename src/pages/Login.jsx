@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import Button from '../components/Button'
 import apamLogo from '../assets/apam-logo.png'
+import { useNotify } from '../hooks/useNotify'
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '')
 
@@ -21,16 +22,15 @@ function getLoginErrorMessage(payload, status) {
 }
 
 export default function Login({ onLogin }) {
+  const notify = useNotify()
   const [emailOrUserName, setEmailOrUserName] = useState('')
   const [password, setPassword] = useState('')
-  const [errorMessage, setErrorMessage] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   async function handleSubmit(event) {
     event.preventDefault()
 
     setIsSubmitting(true)
-    setErrorMessage('')
 
     try {
       const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
@@ -50,9 +50,10 @@ export default function Login({ onLogin }) {
         throw new Error(getLoginErrorMessage(responseBody, response.status))
       }
 
+      notify.success('Signed in successfully.')
       onLogin(responseBody.data)
     } catch (error) {
-      setErrorMessage(
+      notify.error(
         error instanceof Error
           ? error.message
           : 'Unable to sign in at the moment. Please try again.',
@@ -115,12 +116,6 @@ export default function Login({ onLogin }) {
                 required
               />
             </label>
-
-            {errorMessage ? (
-              <p className="login-error" role="alert">
-                {errorMessage}
-              </p>
-            ) : null}
 
             <Button type="submit" className="login-submit" disabled={isSubmitting}>
               {isSubmitting ? 'Signing in...' : 'Sign in'}

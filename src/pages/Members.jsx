@@ -4,6 +4,7 @@ import Button from '../components/Button'
 import DataTable from '../components/DataTable'
 import Modal from '../components/Modal'
 import ProgressBar from '../components/ProgressBar'
+import { useNotify } from '../hooks/useNotify'
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '')
 
@@ -438,6 +439,7 @@ const triggerDownload = (content, mimeType, filename) => {
 }
 
 export default function Members({ session }) {
+  const notify = useNotify()
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isExportModalOpen, setIsExportModalOpen] = useState(false)
   const [exportFormat, setExportFormat] = useState('csv')
@@ -477,7 +479,9 @@ export default function Members({ session }) {
 
       setMembers(payload.data ?? [])
     } catch (error) {
-      setPageError(error instanceof Error ? error.message : 'Failed to load members.')
+      const errorMessage = error instanceof Error ? error.message : 'Failed to load members.'
+      setPageError(errorMessage)
+      notify.error(errorMessage)
     } finally {
       setIsLoading(false)
     }
@@ -704,7 +708,9 @@ export default function Members({ session }) {
 
   const handleExportMembers = () => {
     if (exportRows.length === 0) {
-      setExportError('There is no data to export for the current filter selection.')
+      const errorMessage = 'There is no data to export for the current filter selection.'
+      setExportError(errorMessage)
+      notify.error(errorMessage)
       return
     }
 
@@ -719,6 +725,7 @@ export default function Members({ session }) {
       )
       triggerDownload(`${header}\n${lines.join('\n')}`, 'text/csv;charset=utf-8', `${fileBase}.csv`)
       closeExportModal()
+      notify.success('Members exported successfully as CSV.')
       return
     }
 
@@ -726,6 +733,7 @@ export default function Members({ session }) {
       const xml = buildExportExcelXml(exportRows)
       triggerDownload(xml, 'application/vnd.ms-excel', `${fileBase}.xls`)
       closeExportModal()
+      notify.success('Members exported successfully as Excel.')
       return
     }
 
@@ -733,12 +741,15 @@ export default function Members({ session }) {
       const html = buildExportHtmlDocument(title, exportRows)
       triggerDownload(html, 'application/msword', `${fileBase}.doc`)
       closeExportModal()
+      notify.success('Members exported successfully as Word document.')
       return
     }
 
     const printWindow = window.open('', '_blank', 'noopener,noreferrer')
     if (!printWindow) {
-      setExportError('Popup was blocked. Allow popups to export as PDF.')
+      const errorMessage = 'Popup was blocked. Allow popups to export as PDF.'
+      setExportError(errorMessage)
+      notify.error(errorMessage)
       return
     }
 
@@ -750,6 +761,7 @@ export default function Members({ session }) {
       printWindow.print()
     }, 300)
     closeExportModal()
+    notify.success('Print dialog opened for PDF export.')
   }
 
   const totalMembers = members.length
@@ -1197,8 +1209,11 @@ export default function Members({ session }) {
       setFormValues(createEmptyForm())
       setStepIndex(0)
       await fetchMembers()
+      notify.success(activeMember ? 'Member updated successfully.' : 'Member created successfully.')
     } catch (error) {
-      setSaveError(error instanceof Error ? error.message : 'Failed to save member.')
+      const errorMessage = error instanceof Error ? error.message : 'Failed to save member.'
+      setSaveError(errorMessage)
+      notify.error(errorMessage)
     } finally {
       setIsSaving(false)
     }
