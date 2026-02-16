@@ -4,6 +4,7 @@ import Sidebar from './components/Sidebar'
 import Topbar from './components/Topbar'
 import Dashboard from './pages/Dashboard'
 import Members from './pages/Members'
+import Programs from './pages/Programs'
 import SkillsLivelihoods from './pages/SkillsLivelihoods'
 import Cases from './pages/Cases'
 import Reports from './pages/Reports'
@@ -16,6 +17,7 @@ const AUTH_STORAGE_KEY = 'apam.me.auth'
 const NAV_ITEMS = [
   'Dashboard',
   'Members',
+  'Programs',
   'Skills & Livelihoods',
   'Cases',
   'Reports',
@@ -25,6 +27,7 @@ const NAV_ITEMS = [
 const PAGE_COMPONENTS = {
   Dashboard,
   Members,
+  Programs,
   'Skills & Livelihoods': SkillsLivelihoods,
   Cases,
   Reports,

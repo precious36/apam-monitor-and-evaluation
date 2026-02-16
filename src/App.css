@@ -861,6 +861,40 @@
   grid-column: 1 / -1;
 }
 
+.repeatable-section {
+  gap: 10px;
+}
+
+.repeatable-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.repeatable-list {
+  display: grid;
+  gap: 10px;
+}
+
+.repeatable-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.indicator-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-alt);
+}
+
 .parent-section {
   gap: 12px;
 }
@@ -1198,6 +1232,16 @@
 .status-acquitted {
   background: rgba(96, 125, 139, 0.2);
   color: #455a64;
+}
+
+.status-planned {
+  background: rgba(96, 125, 139, 0.2);
+  color: #455a64;
+}
+
+.status-completed {
+  background: rgba(46, 125, 50, 0.2);
+  color: #2e7d32;
 }
 
 .member-status {
