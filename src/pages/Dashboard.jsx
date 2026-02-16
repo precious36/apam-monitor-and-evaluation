@@ -1,91 +1,445 @@
-﻿import Card from '../components/Card'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import Card from '../components/Card'
 import Button from '../components/Button'
-import HorizontalBarChart from '../components/HorizontalBarChart'
-import ColumnChart from '../components/ColumnChart'
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  PieChart,
+  Pie,
+  Cell,
+  AreaChart,
+  Area,
+} from 'recharts'
+import { useNotify } from '../hooks/useNotify'
 
-const casesByType = [
-  { label: 'GBV', value: 48 },
-  { label: 'Child protection', value: 36 },
-  { label: 'Labor', value: 28 },
-  { label: 'Health referral', value: 22 },
-]
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '')
+const CASE_STATUS_COLORS = ['#008bb8', '#2e7d32', '#c48b18', '#c25b3f', '#61758d', '#00a0d8', '#705e9c']
+const GENDER_COLORS = ['#00a0d8', '#2379c8', '#2e7d32', '#c48b18']
+const EMPTY_LIST = []
+const EMPTY_SUMMARY = {
+  totalMembers: 0,
+  employedMembers: 0,
+  unemployedMembers: 0,
+  membersWithKnownEmploymentStatus: 0,
+  employmentRatePercent: 0,
+  totalCases: 0,
+  activeCases: 0,
+  criticalCases: 0,
+  closedCases: 0,
+  membersLinkedToCases: 0,
+}
 
-const skillDemand = [
-  { label: 'Tailoring', value: 68 },
-  { label: 'Agri-tech', value: 54 },
-  { label: 'Hospitality', value: 42 },
-  { label: 'Carpentry', value: 37 },
-  { label: 'Digital', value: 31 },
-]
+const getApiErrorMessage = (payload, status, fallbackMessage) => {
+  if (payload?.errors?.length) {
+    return payload.errors[0]
+  }
 
-export default function Dashboard() {
+  if (payload?.message) {
+    return payload.message
+  }
+
+  if (status === 401) {
+    return 'Your session has expired. Please sign in again.'
+  }
+
+  return fallbackMessage
+}
+
+const formatPercent = (value) => `${Math.round(value)}%`
+const formatInteger = (value) => Number(value ?? 0).toLocaleString()
+const truncateLabel = (value, max = 16) => {
+  const label = String(value ?? '')
+  return label.length > max ? `${label.slice(0, Math.max(max - 1, 1))}...` : label
+}
+
+function DashboardTooltip({ active, payload, label }) {
+  if (!active || !payload?.length) {
+    return null
+  }
+
   return (
-    <div className="page">
-      <div className="page-header">
+    <div className="chart-tooltip">
+      {label ? <p className="chart-tooltip-label">{label}</p> : null}
+      <ul className="chart-tooltip-list">
+        {payload.map((entry) => (
+          <li key={`${entry.dataKey}-${entry.name}`} className="chart-tooltip-item">
+            <span className="chart-tooltip-dot" style={{ backgroundColor: entry.color ?? '#00a0d8' }} />
+            <span>{entry.name ?? entry.dataKey}</span>
+            <strong>{formatInteger(entry.value)}</strong>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+function DashboardLegend({ payload = [] }) {
+  if (!payload.length) {
+    return null
+  }
+
+  return (
+    <ul className="chart-legend-list">
+      {payload.map((entry) => (
+        <li key={`${entry.value}-${entry.color}`} className="chart-legend-item">
+          <span className="chart-legend-color" style={{ backgroundColor: entry.color ?? '#00a0d8' }} />
+          <span>{entry.value}</span>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+export default function Dashboard({ session }) {
+  const notify = useNotify()
+  const [analytics, setAnalytics] = useState(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [pageError, setPageError] = useState('')
+
+  const authHeader = useMemo(() => {
+    const token = session?.accessToken
+    return token ? { Authorization: `Bearer ${token}` } : {}
+  }, [session?.accessToken])
+
+  const loadDashboard = useCallback(async () => {
+    setIsLoading(true)
+    setPageError('')
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/dashboard/analytics`, {
+        headers: authHeader,
+      })
+      const payload = await response.json().catch(() => null)
+
+      if (!response.ok || !payload?.succeeded || !payload?.data) {
+        throw new Error(getApiErrorMessage(payload, response.status, 'Failed to load dashboard analytics.'))
+      }
+
+      setAnalytics(payload.data)
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to load dashboard data.'
+      setAnalytics(null)
+      setPageError(errorMessage)
+      notify.error(errorMessage)
+    } finally {
+      setIsLoading(false)
+    }
+  }, [authHeader, notify])
+
+  useEffect(() => {
+    loadDashboard()
+  }, [loadDashboard])
+
+  const summary = analytics?.summary ?? EMPTY_SUMMARY
+  const membersByDistrictData = analytics?.membersByDistrict ?? EMPTY_LIST
+  const casesByTypeData = analytics?.casesByType ?? EMPTY_LIST
+  const casesByStatusData = analytics?.casesByStatus ?? EMPTY_LIST
+  const membersByGenderData = analytics?.membersByGender ?? EMPTY_LIST
+  const monthlyTrendData = analytics?.casesMonthlyTrend ?? EMPTY_LIST
+  const topDistrict = useMemo(() => {
+    if (!membersByDistrictData.length) {
+      return null
+    }
+
+    return membersByDistrictData.reduce((highest, item) =>
+      Number(item.value ?? 0) > Number(highest.value ?? 0) ? item : highest
+    )
+  }, [membersByDistrictData])
+  const peakTrendPoint = useMemo(() => {
+    if (!monthlyTrendData.length) {
+      return null
+    }
+
+    return monthlyTrendData.reduce((peak, item) =>
+      Number(item.value ?? 0) > Number(peak.value ?? 0) ? item : peak
+    )
+  }, [monthlyTrendData])
+  const totalCasesFromStatus = useMemo(
+    () => casesByStatusData.reduce((total, item) => total + Number(item.value ?? 0), 0),
+    [casesByStatusData]
+  )
+  const activeCaseRate =
+    summary.totalCases > 0 ? Math.round((summary.activeCases / summary.totalCases) * 100) : 0
+  const generatedAt = analytics?.generatedAtUtc
+    ? new Date(analytics.generatedAtUtc).toLocaleString()
+    : null
+
+  return (
+    <div className="page dashboard-page">
+      <div className="page-header dashboard-header">
         <div>
           <p className="eyebrow">Monitoring and Evaluation</p>
           <h1 className="page-title">Dashboard Overview</h1>
           <p className="page-subtitle">
-            Consolidated performance view across members, cases, and skills programs.
+            Real-time analytics across member registry and case management records.
           </p>
+          {generatedAt ? <p className="table-meta">Last updated: {generatedAt}</p> : null}
         </div>
         <div className="page-actions">
-          <Button variant="outline">Download brief</Button>
-          <Button>Generate report</Button>
+          <Button variant="outline" onClick={loadDashboard} disabled={isLoading}>
+            {isLoading ? 'Refreshing...' : 'Refresh data'}
+          </Button>
         </div>
       </div>
 
+      {pageError ? (
+        <p className="alert" role="alert">
+          {pageError}
+        </p>
+      ) : null}
+
       <section className="grid-metrics">
-        <Card className="metric-card reveal" title="Total members" subtitle="Active registry">
-          <div className="metric-value">4,812</div>
-          <p className="metric-meta">+8% since last quarter</p>
+        <Card
+          className="metric-card metric-card-kpi metric-card--blue reveal"
+          title="Total members"
+          subtitle="Active registry"
+        >
+          <div className="metric-value">{formatInteger(summary.totalMembers)}</div>
+          <p className="metric-meta">Live count from member records</p>
         </Card>
-        <Card className="metric-card reveal" title="Employed vs unemployed" subtitle="Program placement">
+        <Card
+          className="metric-card metric-card-kpi metric-card--green reveal"
+          title="Employed vs unemployed"
+          subtitle="Known employment status"
+        >
           <div className="split-meter">
             <div className="split-meter-bar">
-              <span style={{ width: '64%' }} />
+              <span style={{ width: `${summary.employmentRatePercent}%` }} />
             </div>
             <div className="split-meter-labels">
-              <span>Employed 64%</span>
-              <span>Unemployed 36%</span>
+              <span>Employed {formatPercent(summary.employmentRatePercent)}</span>
+              <span>Unemployed {formatPercent(100 - summary.employmentRatePercent)}</span>
             </div>
           </div>
-          <p className="metric-meta">Job placements remain stable</p>
+          <p className="metric-meta">
+            {formatInteger(summary.employedMembers)} employed, {formatInteger(summary.unemployedMembers)} unemployed
+          </p>
         </Card>
-        <Card className="metric-card reveal" title="Top skills demanded" subtitle="Current intake">
-          <ul className="metric-list">
-            <li>Tailoring</li>
-            <li>Agri-tech</li>
-            <li>Hospitality</li>
-          </ul>
-          <p className="metric-meta">Requests trending in northern districts</p>
+        <Card
+          className="metric-card metric-card-kpi metric-card--amber reveal"
+          title="Active cases"
+          subtitle="Open investigations"
+        >
+          <div className="metric-value">{formatInteger(summary.activeCases)}</div>
+          <p className="metric-meta">{formatInteger(summary.criticalCases)} marked critical</p>
         </Card>
-        <Card className="metric-card reveal" title="Active cases" subtitle="Open investigations">
-          <div className="metric-value">126</div>
-          <p className="metric-meta">12 marked critical</p>
+        <Card
+          className="metric-card metric-card-kpi metric-card--teal reveal"
+          title="Closed cases"
+          subtitle="Resolved outcomes"
+        >
+          <div className="metric-value">{formatInteger(summary.closedCases)}</div>
+          <p className="metric-meta">Cases with final outcomes</p>
         </Card>
-        <Card className="metric-card reveal" title="Trainings completed" subtitle="Last 30 days">
-          <div className="metric-value">318</div>
-          <p className="metric-meta">Completion rate 91%</p>
+        <Card
+          className="metric-card metric-card-kpi metric-card--slate reveal"
+          title="Members linked to cases"
+          subtitle="Member-case relationship"
+        >
+          <div className="metric-value">{formatInteger(summary.membersLinkedToCases)}</div>
+          <p className="metric-meta">Unique members referenced in case records</p>
         </Card>
       </section>
 
-      <section className="grid-charts">
+      <section className="dashboard-charts-grid">
         <Card
-          title="Cases by type"
-          subtitle="Open cases by category"
-          action={<Button variant="ghost">View cases</Button>}
-          className="reveal"
+          title="Cases by Type"
+          subtitle="Distribution by category"
+          action={<span className="chart-card-badge">{formatInteger(summary.totalCases)} total</span>}
+          className="chart-card chart-card-cases-type reveal"
         >
-          <HorizontalBarChart data={casesByType} />
+          {casesByTypeData.length > 0 ? (
+            <div className="analytics-chart">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={casesByTypeData} margin={{ top: 12, right: 12, left: 0, bottom: 8 }}>
+                  <defs>
+                    <linearGradient id="casesTypeGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#00a8de" />
+                      <stop offset="100%" stopColor="#0079a4" />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="4 6" stroke="#d9e3ee" vertical={false} />
+                  <XAxis
+                    dataKey="label"
+                    tick={{ fontSize: 12 }}
+                    tickFormatter={(value) => truncateLabel(value, 15)}
+                    interval={0}
+                    angle={-14}
+                    textAnchor="end"
+                    height={58}
+                  />
+                  <YAxis allowDecimals={false} />
+                  <Tooltip content={<DashboardTooltip />} />
+                  <Bar
+                    dataKey="value"
+                    name="Cases"
+                    fill="url(#casesTypeGradient)"
+                    radius={[10, 10, 0, 0]}
+                    maxBarSize={42}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <p className="table-meta">No case data available.</p>
+          )}
         </Card>
+
         <Card
-          title="Skill demand"
-          subtitle="Requests by skill area"
-          action={<Button variant="ghost">Skill details</Button>}
-          className="reveal"
+          title="Members by District"
+          subtitle="Top districts in registry"
+          action={
+            <span className="chart-card-badge">
+              {topDistrict
+                ? `${truncateLabel(topDistrict.label, 12)}: ${formatInteger(topDistrict.value)}`
+                : `${formatInteger(summary.totalMembers)} total`}
+            </span>
+          }
+          className="chart-card chart-card-members-district reveal"
         >
-          <ColumnChart data={skillDemand} />
+          {membersByDistrictData.length > 0 ? (
+            <div className="analytics-chart">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={membersByDistrictData} layout="vertical" margin={{ top: 8, right: 20, left: 20, bottom: 8 }}>
+                  <defs>
+                    <linearGradient id="districtGradient" x1="0" y1="0" x2="1" y2="0">
+                      <stop offset="0%" stopColor="#28a57a" />
+                      <stop offset="100%" stopColor="#1f7f5e" />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="4 6" stroke="#d9e3ee" horizontal={false} />
+                  <XAxis type="number" allowDecimals={false} />
+                  <YAxis
+                    type="category"
+                    dataKey="label"
+                    width={108}
+                    tick={{ fontSize: 12 }}
+                    tickFormatter={(value) => truncateLabel(value, 12)}
+                  />
+                  <Tooltip content={<DashboardTooltip />} />
+                  <Bar dataKey="value" name="Members" fill="url(#districtGradient)" radius={[0, 10, 10, 0]} barSize={20} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <p className="table-meta">No member district data available.</p>
+          )}
+        </Card>
+
+        <Card
+          title="Cases by Status"
+          subtitle="Operational status mix"
+          action={<span className="chart-card-badge">{formatPercent(activeCaseRate)} active</span>}
+          className="chart-card chart-card-cases-status reveal"
+        >
+          {casesByStatusData.length > 0 ? (
+            <div className="analytics-chart analytics-chart-pie">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={casesByStatusData}
+                    dataKey="value"
+                    nameKey="label"
+                    innerRadius={60}
+                    outerRadius={98}
+                    paddingAngle={2}
+                  >
+                    {casesByStatusData.map((entry, index) => (
+                      <Cell key={`${entry.label}-${index}`} fill={CASE_STATUS_COLORS[index % CASE_STATUS_COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip content={<DashboardTooltip />} />
+                  <Legend
+                    verticalAlign="bottom"
+                    content={(legendProps) => <DashboardLegend {...legendProps} />}
+                  />
+                  <text x="50%" y="47%" textAnchor="middle" className="chart-donut-caption">
+                    Total cases
+                  </text>
+                  <text x="50%" y="56%" textAnchor="middle" className="chart-donut-value">
+                    {formatInteger(totalCasesFromStatus)}
+                  </text>
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <p className="table-meta">No case status data available.</p>
+          )}
+        </Card>
+
+        <Card
+          title="Monthly Case Trend"
+          subtitle="Cases created over last 6 months"
+          action={
+            <span className="chart-card-badge">
+              {peakTrendPoint ? `${peakTrendPoint.label}: ${formatInteger(peakTrendPoint.value)}` : 'Trend pending'}
+            </span>
+          }
+          className="chart-card chart-card-monthly-trend reveal"
+        >
+          {monthlyTrendData.length > 0 ? (
+            <div className="analytics-chart">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={monthlyTrendData} margin={{ top: 8, right: 20, left: 0, bottom: 8 }}>
+                  <defs>
+                    <linearGradient id="monthlyTrendGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#d86a42" stopOpacity={0.45} />
+                      <stop offset="100%" stopColor="#d86a42" stopOpacity={0.05} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="4 6" stroke="#d9e3ee" />
+                  <XAxis dataKey="label" />
+                  <YAxis allowDecimals={false} />
+                  <Tooltip content={<DashboardTooltip />} />
+                  <Area
+                    type="monotone"
+                    dataKey="value"
+                    name="Cases"
+                    stroke="#bf5a36"
+                    strokeWidth={3}
+                    fill="url(#monthlyTrendGradient)"
+                    dot={{ r: 4, fill: '#ffffff', stroke: '#bf5a36', strokeWidth: 2 }}
+                    activeDot={{ r: 6, fill: '#bf5a36' }}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <p className="table-meta">No monthly trend data available.</p>
+          )}
+        </Card>
+
+        <Card
+          title="Members by Gender"
+          subtitle="Distribution snapshot"
+          action={<span className="chart-card-badge">{membersByGenderData.length} categories</span>}
+          className="chart-card chart-card-members-gender reveal"
+        >
+          {membersByGenderData.length > 0 ? (
+            <div className="analytics-chart">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={membersByGenderData} margin={{ top: 8, right: 20, left: 0, bottom: 8 }}>
+                  <CartesianGrid strokeDasharray="4 6" stroke="#d9e3ee" vertical={false} />
+                  <XAxis dataKey="label" />
+                  <YAxis allowDecimals={false} />
+                  <Tooltip content={<DashboardTooltip />} />
+                  <Bar dataKey="value" name="Members" radius={[10, 10, 0, 0]} maxBarSize={46}>
+                    {membersByGenderData.map((entry, index) => (
+                      <Cell key={`${entry.label}-${index}`} fill={GENDER_COLORS[index % GENDER_COLORS.length]} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <p className="table-meta">No member gender data available.</p>
+          )}
         </Card>
       </section>
     </div>
