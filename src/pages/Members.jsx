@@ -172,6 +172,10 @@ const createEmptyForm = () => ({
   spousePhoneNumber: '',
   parentContacts: [createEmptyParentContact()],
   educationLevel: '',
+  personsWithAlbinismInFamily: '',
+  numberOfChildrenInPreschool: '',
+  numberOfChildrenInPrimarySchool: '',
+  numberOfChildrenInSecondarySchool: '',
   skills: [createEmptySkill()],
   currentlyRunsBusiness: '',
   typeOfBusiness: '',
@@ -208,6 +212,7 @@ const createEmptyForm = () => ({
   hasStartupCapital: '',
   receivedBusinessGrantOrLoan: '',
   partOfSavingsOrCooperative: '',
+  beneficiaryOfGovernmentOrOtherSocialSchemes: '',
   programInterests: createDefaultProgramInterests(),
   consentStatus: '',
   dataSharingConsent: '',
@@ -784,6 +789,9 @@ export default function Members({ session }) {
     formValues.currentEmploymentStatus === 'Employed' ||
     formValues.currentEmploymentStatus === 'Self-employed'
   const isUnemployed = formValues.currentEmploymentStatus === 'Unemployed'
+  const personsWithAlbinismInFamilyCount = Number.parseInt(formValues.personsWithAlbinismInFamily, 10)
+  const shouldShowChildrenSchoolQuestions =
+    !Number.isNaN(personsWithAlbinismInFamilyCount) && personsWithAlbinismInFamilyCount > 0
 
   const updateField = (field) => (event) => {
     const { value } = event.target
@@ -836,6 +844,15 @@ export default function Members({ session }) {
 
         if (value !== 'Unemployed') {
           next.activelySeekingWork = ''
+        }
+      }
+
+      if (field === 'personsWithAlbinismInFamily') {
+        const parsedCount = Number.parseInt(value, 10)
+        if (Number.isNaN(parsedCount) || parsedCount <= 0) {
+          next.numberOfChildrenInPreschool = ''
+          next.numberOfChildrenInPrimarySchool = ''
+          next.numberOfChildrenInSecondarySchool = ''
         }
       }
 
@@ -1011,6 +1028,22 @@ export default function Members({ session }) {
       spouseMemberCode: member.spouseMemberCode ?? '',
       spouseFullName: member.spouseFullName ?? '',
       spousePhoneNumber: member.spousePhoneNumber ?? '',
+      personsWithAlbinismInFamily:
+        typeof member.personsWithAlbinismInFamily === 'number'
+          ? String(member.personsWithAlbinismInFamily)
+          : '',
+      numberOfChildrenInPreschool:
+        typeof member.numberOfChildrenInPreschool === 'number'
+          ? String(member.numberOfChildrenInPreschool)
+          : '',
+      numberOfChildrenInPrimarySchool:
+        typeof member.numberOfChildrenInPrimarySchool === 'number'
+          ? String(member.numberOfChildrenInPrimarySchool)
+          : '',
+      numberOfChildrenInSecondarySchool:
+        typeof member.numberOfChildrenInSecondarySchool === 'number'
+          ? String(member.numberOfChildrenInSecondarySchool)
+          : '',
       parentContacts,
       educationLevel: member.educationLevel ?? '',
       skills,
@@ -1057,6 +1090,8 @@ export default function Members({ session }) {
       hasStartupCapital: economicOpportunityProfile.hasStartupCapital ?? '',
       receivedBusinessGrantOrLoan: economicOpportunityProfile.receivedBusinessGrantOrLoan ?? '',
       partOfSavingsOrCooperative: economicOpportunityProfile.partOfSavingsOrCooperative ?? '',
+      beneficiaryOfGovernmentOrOtherSocialSchemes:
+        economicOpportunityProfile.beneficiaryOfGovernmentOrOtherSocialSchemes ?? '',
       programInterests,
       consentStatus: member.consentStatus ?? '',
       dataSharingConsent: member.dataSharingConsent ?? '',
@@ -1109,6 +1144,10 @@ export default function Members({ session }) {
 
       const yearsInOperation = Number.parseInt(formValues.yearsInOperation, 10)
       const numberOfEmployees = Number.parseInt(formValues.numberOfEmployees, 10)
+      const personsWithAlbinismInFamily = Number.parseInt(formValues.personsWithAlbinismInFamily, 10)
+      const numberOfChildrenInPreschool = Number.parseInt(formValues.numberOfChildrenInPreschool, 10)
+      const numberOfChildrenInPrimarySchool = Number.parseInt(formValues.numberOfChildrenInPrimarySchool, 10)
+      const numberOfChildrenInSecondarySchool = Number.parseInt(formValues.numberOfChildrenInSecondarySchool, 10)
       const programInterests = formValues.programInterests
         .map((entry) => ({
           programArea: entry.programArea,
@@ -1132,6 +1171,18 @@ export default function Members({ session }) {
         spouseMemberCode: formValues.spouseMemberCode.trim() || null,
         spouseFullName: formValues.spouseFullName.trim() || null,
         spousePhoneNumber: formValues.spousePhoneNumber.trim() || null,
+        personsWithAlbinismInFamily: Number.isNaN(personsWithAlbinismInFamily)
+          ? null
+          : Math.max(personsWithAlbinismInFamily, 0),
+        numberOfChildrenInPreschool: Number.isNaN(numberOfChildrenInPreschool)
+          ? null
+          : Math.max(numberOfChildrenInPreschool, 0),
+        numberOfChildrenInPrimarySchool: Number.isNaN(numberOfChildrenInPrimarySchool)
+          ? null
+          : Math.max(numberOfChildrenInPrimarySchool, 0),
+        numberOfChildrenInSecondarySchool: Number.isNaN(numberOfChildrenInSecondarySchool)
+          ? null
+          : Math.max(numberOfChildrenInSecondarySchool, 0),
         parentContacts,
         educationLevel: formValues.educationLevel || null,
         employmentStatus: formValues.currentEmploymentStatus || formValues.employmentStatus || null,
@@ -1181,6 +1232,8 @@ export default function Members({ session }) {
           hasStartupCapital: formValues.hasStartupCapital || null,
           receivedBusinessGrantOrLoan: formValues.receivedBusinessGrantOrLoan || null,
           partOfSavingsOrCooperative: formValues.partOfSavingsOrCooperative || null,
+          beneficiaryOfGovernmentOrOtherSocialSchemes:
+            formValues.beneficiaryOfGovernmentOrOtherSocialSchemes || null,
         },
         programInterests,
       }
@@ -1377,6 +1430,54 @@ export default function Members({ session }) {
                     placeholder="Enter spouse phone number"
                     value={formValues.spousePhoneNumber}
                     onChange={updateField('spousePhoneNumber')}
+                  />
+                </label>
+              </>
+            ) : null}
+            <label className="form-field">
+              <span>How many persons with albinism are in your family?</span>
+              <input
+                type="number"
+                min="0"
+                step="1"
+                placeholder="Enter count"
+                value={formValues.personsWithAlbinismInFamily}
+                onChange={updateField('personsWithAlbinismInFamily')}
+              />
+            </label>
+            {shouldShowChildrenSchoolQuestions ? (
+              <>
+                <label className="form-field">
+                  <span>Number of children in pre-school</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    placeholder="Enter count"
+                    value={formValues.numberOfChildrenInPreschool}
+                    onChange={updateField('numberOfChildrenInPreschool')}
+                  />
+                </label>
+                <label className="form-field">
+                  <span>Number of children in primary school</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    placeholder="Enter count"
+                    value={formValues.numberOfChildrenInPrimarySchool}
+                    onChange={updateField('numberOfChildrenInPrimarySchool')}
+                  />
+                </label>
+                <label className="form-field">
+                  <span>Number of children in secondary school</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    placeholder="Enter count"
+                    value={formValues.numberOfChildrenInSecondarySchool}
+                    onChange={updateField('numberOfChildrenInSecondarySchool')}
                   />
                 </label>
               </>
@@ -1898,6 +1999,17 @@ export default function Members({ session }) {
                 <option>No</option>
               </select>
             </label>
+            <label className="form-field">
+              <span>Have you ever been beneficiary of government or other social schemes?</span>
+              <select
+                value={formValues.beneficiaryOfGovernmentOrOtherSocialSchemes}
+                onChange={updateField('beneficiaryOfGovernmentOrOtherSocialSchemes')}
+              >
+                <option value="">Select response</option>
+                <option>Yes</option>
+                <option>No</option>
+              </select>
+            </label>
           </div>
         )
       case 6:
@@ -2164,6 +2276,22 @@ export default function Members({ session }) {
               <strong>{toDisplayValue(profileMember.maritalStatus)}</strong>
             </div>
             <div className="form-field">
+              <span>Persons with albinism in family</span>
+              <strong>{toDisplayValue(profileMember.personsWithAlbinismInFamily)}</strong>
+            </div>
+            <div className="form-field">
+              <span>Children in pre-school</span>
+              <strong>{toDisplayValue(profileMember.numberOfChildrenInPreschool)}</strong>
+            </div>
+            <div className="form-field">
+              <span>Children in primary school</span>
+              <strong>{toDisplayValue(profileMember.numberOfChildrenInPrimarySchool)}</strong>
+            </div>
+            <div className="form-field">
+              <span>Children in secondary school</span>
+              <strong>{toDisplayValue(profileMember.numberOfChildrenInSecondarySchool)}</strong>
+            </div>
+            <div className="form-field">
               <span>Employment status</span>
               <strong>{toDisplayValue(profileMember.employmentStatus)}</strong>
             </div>
@@ -2250,6 +2378,14 @@ export default function Members({ session }) {
               <span>Savings/cooperative</span>
               <strong>
                 {toDisplayValue(profileMember.economicOpportunityProfile?.partOfSavingsOrCooperative)}
+              </strong>
+            </div>
+            <div className="form-field">
+              <span>Beneficiary of government/other social schemes</span>
+              <strong>
+                {toDisplayValue(
+                  profileMember.economicOpportunityProfile?.beneficiaryOfGovernmentOrOtherSocialSchemes,
+                )}
               </strong>
             </div>
             <div className="form-field form-field-full">
