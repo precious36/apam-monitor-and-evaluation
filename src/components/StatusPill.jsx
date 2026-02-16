@@ -8,6 +8,8 @@ const STATUS_MAP = {
   caseonhearingstage: 'status-hearing-stage',
   sentenced: 'status-sentenced',
   acquitted: 'status-acquitted',
+  planned: 'status-planned',
+  completed: 'status-completed',
 }
 
 const normalizeStatusToken = (value) =>
