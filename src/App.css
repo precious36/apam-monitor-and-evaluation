@@ -1763,6 +1763,7 @@
   display: grid;
   grid-template-columns: minmax(220px, 260px) 1fr;
   gap: 18px;
+  align-items: start;
 }
 
 .filters-panel {
@@ -1775,6 +1776,11 @@
   height: fit-content;
 }
 
+.filters-panel h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
 .filter-actions {
   display: grid;
   gap: 8px;
@@ -1783,6 +1789,98 @@
 .reports-main {
   display: grid;
   gap: 18px;
+}
+
+.reports-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 14px;
+}
+
+.report-kpi-card {
+  border-radius: 16px;
+  padding: 14px;
+}
+
+.report-kpi-card .card-body {
+  padding: 0;
+}
+
+.report-kpi-card-body {
+  display: grid;
+  gap: 6px;
+}
+
+.report-kpi-label {
+  margin: 0;
+  color: #6a7b90;
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  font-weight: 700;
+}
+
+.report-kpi-value {
+  margin: 0;
+  color: #1c2735;
+  font-size: 1.7rem;
+  font-weight: 700;
+  line-height: 1.05;
+}
+
+.report-kpi-note {
+  margin: 0;
+  color: #6b7d91;
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.reports-chart-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 18px;
+}
+
+.reports-chart-grid .card {
+  min-height: 250px;
+}
+
+.reports-chart-grid-skills .card {
+  min-height: 230px;
+}
+
+.report-filter-summary {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(124, 142, 162, 0.14);
+  background: rgba(244, 247, 252, 0.75);
+}
+
+.report-filter-summary-label {
+  margin: 0;
+  color: #6b7d91;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.9px;
+  font-weight: 700;
+}
+
+.report-filter-summary-value {
+  margin: 0;
+  color: #2f3c4f;
+  font-size: 0.84rem;
+  font-weight: 600;
+}
+
+.report-notes-list {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 8px;
+  color: #56677d;
+  font-size: 0.88rem;
 }
 
 .summary-table {
