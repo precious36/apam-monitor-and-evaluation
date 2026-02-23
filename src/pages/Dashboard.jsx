@@ -21,6 +21,10 @@ import { useNotify } from '../hooks/useNotify'
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '')
 const CASE_STATUS_COLORS = ['#008bb8', '#2e7d32', '#c48b18', '#c25b3f', '#61758d', '#00a0d8', '#705e9c']
 const GENDER_COLORS = ['#00a0d8', '#2379c8', '#2e7d32', '#c48b18']
+const CHART_GRID_STROKE = 'rgba(114, 132, 154, 0.14)'
+const CHART_AXIS_TICK = { fill: '#72849a', fontSize: 12, fontWeight: 500 }
+const CHART_BAR_TOOLTIP_CURSOR = { fill: 'rgba(107, 124, 147, 0.07)' }
+const CHART_LINE_TOOLTIP_CURSOR = { stroke: 'rgba(107, 124, 147, 0.26)', strokeDasharray: '4 6' }
 const EMPTY_LIST = []
 const EMPTY_SUMMARY = {
   totalMembers: 0,
@@ -164,6 +168,25 @@ export default function Dashboard({ session }) {
     () => casesByStatusData.reduce((total, item) => total + Number(item.value ?? 0), 0),
     [casesByStatusData]
   )
+  const districtAxisMax = useMemo(() => {
+    const maxValue = membersByDistrictData.reduce(
+      (highest, item) => Math.max(highest, Number(item.value ?? 0)),
+      0
+    )
+
+    if (maxValue <= 2) {
+      return 2
+    }
+
+    if (maxValue <= 5) {
+      return maxValue + 1
+    }
+
+    return Math.ceil(maxValue * 1.15)
+  }, [membersByDistrictData])
+  const hasFewCaseTypeBars = casesByTypeData.length > 0 && casesByTypeData.length <= 3
+  const hasFewGenderBars = membersByGenderData.length > 0 && membersByGenderData.length <= 3
+  const hasFewDistrictBars = membersByDistrictData.length > 0 && membersByDistrictData.length <= 3
   const activeCaseRate =
     summary.totalCases > 0 ? Math.round((summary.activeCases / summary.totalCases) * 100) : 0
   const generatedAt = analytics?.generatedAtUtc
@@ -205,8 +228,8 @@ export default function Dashboard({ session }) {
         </Card>
         <Card
           className="metric-card metric-card-kpi metric-card--green reveal"
-          title="Employed vs unemployed"
-          subtitle="Known employment status"
+          title="Employment split"
+          subtitle="Known status"
         >
           <div className="split-meter">
             <div className="split-meter-bar">
@@ -239,8 +262,8 @@ export default function Dashboard({ session }) {
         </Card>
         <Card
           className="metric-card metric-card-kpi metric-card--slate reveal"
-          title="Members linked to cases"
-          subtitle="Member-case relationship"
+          title="Case-linked members"
+          subtitle="Member-case links"
         >
           <div className="metric-value">{formatInteger(summary.membersLinkedToCases)}</div>
           <p className="metric-meta">Unique members referenced in case records</p>
@@ -257,31 +280,46 @@ export default function Dashboard({ session }) {
           {casesByTypeData.length > 0 ? (
             <div className="analytics-chart">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={casesByTypeData} margin={{ top: 12, right: 12, left: 0, bottom: 8 }}>
+                <BarChart
+                  data={casesByTypeData}
+                  margin={{ top: 8, right: 8, left: -8, bottom: 2 }}
+                  barCategoryGap={hasFewCaseTypeBars ? '4%' : '16%'}
+                >
                   <defs>
                     <linearGradient id="casesTypeGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#00a8de" />
-                      <stop offset="100%" stopColor="#0079a4" />
+                      <stop offset="0%" stopColor="#6474ff" />
+                      <stop offset="100%" stopColor="#4759f4" />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="4 6" stroke="#d9e3ee" vertical={false} />
+                  <CartesianGrid strokeDasharray="3 7" stroke={CHART_GRID_STROKE} vertical={false} />
                   <XAxis
                     dataKey="label"
-                    tick={{ fontSize: 12 }}
-                    tickFormatter={(value) => truncateLabel(value, 15)}
-                    interval={0}
-                    angle={-14}
-                    textAnchor="end"
-                    height={58}
+                    axisLine={false}
+                    tickLine={false}
+                    tickMargin={10}
+                    tick={CHART_AXIS_TICK}
+                    padding={hasFewCaseTypeBars ? { left: 8, right: 8 } : { left: 2, right: 2 }}
+                    tickFormatter={(value) => truncateLabel(value, 12)}
+                    interval="preserveStartEnd"
+                    minTickGap={20}
+                    height={34}
                   />
-                  <YAxis allowDecimals={false} />
-                  <Tooltip content={<DashboardTooltip />} />
+                  <YAxis
+                    allowDecimals={false}
+                    axisLine={false}
+                    tickLine={false}
+                    tickMargin={8}
+                    width={34}
+                    tick={CHART_AXIS_TICK}
+                  />
+                  <Tooltip content={<DashboardTooltip />} cursor={CHART_BAR_TOOLTIP_CURSOR} />
                   <Bar
                     dataKey="value"
                     name="Cases"
                     fill="url(#casesTypeGradient)"
-                    radius={[10, 10, 0, 0]}
-                    maxBarSize={42}
+                    radius={[12, 12, 4, 4]}
+                    barSize={hasFewCaseTypeBars ? 52 : undefined}
+                    maxBarSize={hasFewCaseTypeBars ? 56 : 36}
                   />
                 </BarChart>
               </ResponsiveContainer>
@@ -306,24 +344,46 @@ export default function Dashboard({ session }) {
           {membersByDistrictData.length > 0 ? (
             <div className="analytics-chart">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={membersByDistrictData} layout="vertical" margin={{ top: 8, right: 20, left: 20, bottom: 8 }}>
+                <BarChart
+                  data={membersByDistrictData}
+                  layout="vertical"
+                  margin={{ top: 6, right: 12, left: 4, bottom: 0 }}
+                  barCategoryGap={hasFewDistrictBars ? '10%' : '22%'}
+                >
                   <defs>
                     <linearGradient id="districtGradient" x1="0" y1="0" x2="1" y2="0">
-                      <stop offset="0%" stopColor="#28a57a" />
-                      <stop offset="100%" stopColor="#1f7f5e" />
+                      <stop offset="0%" stopColor="#59c9ff" />
+                      <stop offset="100%" stopColor="#2e9dff" />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="4 6" stroke="#d9e3ee" horizontal={false} />
-                  <XAxis type="number" allowDecimals={false} />
+                  <CartesianGrid strokeDasharray="3 7" stroke={CHART_GRID_STROKE} horizontal={false} />
+                  <XAxis
+                    type="number"
+                    allowDecimals={false}
+                    domain={[0, districtAxisMax]}
+                    axisLine={false}
+                    tickLine={false}
+                    tickMargin={8}
+                    tick={CHART_AXIS_TICK}
+                  />
                   <YAxis
                     type="category"
                     dataKey="label"
-                    width={108}
-                    tick={{ fontSize: 12 }}
+                    width={112}
+                    axisLine={false}
+                    tickLine={false}
+                    tickMargin={10}
+                    tick={CHART_AXIS_TICK}
                     tickFormatter={(value) => truncateLabel(value, 12)}
                   />
-                  <Tooltip content={<DashboardTooltip />} />
-                  <Bar dataKey="value" name="Members" fill="url(#districtGradient)" radius={[0, 10, 10, 0]} barSize={20} />
+                  <Tooltip content={<DashboardTooltip />} cursor={CHART_BAR_TOOLTIP_CURSOR} />
+                  <Bar
+                    dataKey="value"
+                    name="Members"
+                    fill="url(#districtGradient)"
+                    radius={[0, 10, 10, 0]}
+                    barSize={hasFewDistrictBars ? 22 : 18}
+                  />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -346,15 +406,18 @@ export default function Dashboard({ session }) {
                     data={casesByStatusData}
                     dataKey="value"
                     nameKey="label"
-                    innerRadius={60}
-                    outerRadius={98}
-                    paddingAngle={2}
+                    innerRadius={68}
+                    outerRadius={106}
+                    paddingAngle={3}
+                    cornerRadius={6}
+                    startAngle={90}
+                    endAngle={-270}
                   >
                     {casesByStatusData.map((entry, index) => (
                       <Cell key={`${entry.label}-${index}`} fill={CASE_STATUS_COLORS[index % CASE_STATUS_COLORS.length]} />
                     ))}
                   </Pie>
-                  <Tooltip content={<DashboardTooltip />} />
+                  <Tooltip content={<DashboardTooltip />} cursor={false} />
                   <Legend
                     verticalAlign="bottom"
                     content={(legendProps) => <DashboardLegend {...legendProps} />}
@@ -386,26 +449,33 @@ export default function Dashboard({ session }) {
           {monthlyTrendData.length > 0 ? (
             <div className="analytics-chart">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={monthlyTrendData} margin={{ top: 8, right: 20, left: 0, bottom: 8 }}>
+                <AreaChart data={monthlyTrendData} margin={{ top: 8, right: 12, left: -8, bottom: 0 }}>
                   <defs>
                     <linearGradient id="monthlyTrendGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#d86a42" stopOpacity={0.45} />
-                      <stop offset="100%" stopColor="#d86a42" stopOpacity={0.05} />
+                      <stop offset="0%" stopColor="#5b6bff" stopOpacity={0.34} />
+                      <stop offset="100%" stopColor="#5b6bff" stopOpacity={0.03} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="4 6" stroke="#d9e3ee" />
-                  <XAxis dataKey="label" />
-                  <YAxis allowDecimals={false} />
-                  <Tooltip content={<DashboardTooltip />} />
+                  <CartesianGrid strokeDasharray="3 7" stroke={CHART_GRID_STROKE} vertical={false} />
+                  <XAxis dataKey="label" axisLine={false} tickLine={false} tickMargin={10} tick={CHART_AXIS_TICK} />
+                  <YAxis
+                    allowDecimals={false}
+                    axisLine={false}
+                    tickLine={false}
+                    tickMargin={8}
+                    width={34}
+                    tick={CHART_AXIS_TICK}
+                  />
+                  <Tooltip content={<DashboardTooltip />} cursor={CHART_LINE_TOOLTIP_CURSOR} />
                   <Area
-                    type="monotone"
+                    type="natural"
                     dataKey="value"
                     name="Cases"
-                    stroke="#bf5a36"
+                    stroke="#4f5ef6"
                     strokeWidth={3}
                     fill="url(#monthlyTrendGradient)"
-                    dot={{ r: 4, fill: '#ffffff', stroke: '#bf5a36', strokeWidth: 2 }}
-                    activeDot={{ r: 6, fill: '#bf5a36' }}
+                    dot={false}
+                    activeDot={{ r: 5, fill: '#ffffff', stroke: '#4f5ef6', strokeWidth: 3 }}
                   />
                 </AreaChart>
               </ResponsiveContainer>
@@ -424,12 +494,29 @@ export default function Dashboard({ session }) {
           {membersByGenderData.length > 0 ? (
             <div className="analytics-chart">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={membersByGenderData} margin={{ top: 8, right: 20, left: 0, bottom: 8 }}>
-                  <CartesianGrid strokeDasharray="4 6" stroke="#d9e3ee" vertical={false} />
-                  <XAxis dataKey="label" />
-                  <YAxis allowDecimals={false} />
-                  <Tooltip content={<DashboardTooltip />} />
-                  <Bar dataKey="value" name="Members" radius={[10, 10, 0, 0]} maxBarSize={46}>
+                <BarChart
+                  data={membersByGenderData}
+                  margin={{ top: 8, right: 12, left: -8, bottom: 0 }}
+                  barCategoryGap={hasFewGenderBars ? '6%' : '20%'}
+                >
+                  <CartesianGrid strokeDasharray="3 7" stroke={CHART_GRID_STROKE} vertical={false} />
+                  <XAxis dataKey="label" axisLine={false} tickLine={false} tickMargin={10} tick={CHART_AXIS_TICK} />
+                  <YAxis
+                    allowDecimals={false}
+                    axisLine={false}
+                    tickLine={false}
+                    tickMargin={8}
+                    width={34}
+                    tick={CHART_AXIS_TICK}
+                  />
+                  <Tooltip content={<DashboardTooltip />} cursor={CHART_BAR_TOOLTIP_CURSOR} />
+                  <Bar
+                    dataKey="value"
+                    name="Members"
+                    radius={[12, 12, 4, 4]}
+                    barSize={hasFewGenderBars ? 50 : undefined}
+                    maxBarSize={hasFewGenderBars ? 52 : 46}
+                  >
                     {membersByGenderData.map((entry, index) => (
                       <Cell key={`${entry.label}-${index}`} fill={GENDER_COLORS[index % GENDER_COLORS.length]} />
                     ))}
