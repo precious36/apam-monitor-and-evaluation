@@ -279,7 +279,7 @@ export default function Dashboard({ session }) {
         >
           {casesByTypeData.length > 0 ? (
             <div className="analytics-chart">
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
                 <BarChart
                   data={casesByTypeData}
                   margin={{ top: 8, right: 8, left: -8, bottom: 2 }}
@@ -343,7 +343,7 @@ export default function Dashboard({ session }) {
         >
           {membersByDistrictData.length > 0 ? (
             <div className="analytics-chart">
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
                 <BarChart
                   data={membersByDistrictData}
                   layout="vertical"
@@ -400,7 +400,7 @@ export default function Dashboard({ session }) {
         >
           {casesByStatusData.length > 0 ? (
             <div className="analytics-chart analytics-chart-pie">
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
                 <PieChart>
                   <Pie
                     data={casesByStatusData}
@@ -448,7 +448,7 @@ export default function Dashboard({ session }) {
         >
           {monthlyTrendData.length > 0 ? (
             <div className="analytics-chart">
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
                 <AreaChart data={monthlyTrendData} margin={{ top: 8, right: 12, left: -8, bottom: 0 }}>
                   <defs>
                     <linearGradient id="monthlyTrendGradient" x1="0" y1="0" x2="0" y2="1">
@@ -493,7 +493,7 @@ export default function Dashboard({ session }) {
         >
           {membersByGenderData.length > 0 ? (
             <div className="analytics-chart">
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
                 <BarChart
                   data={membersByGenderData}
                   margin={{ top: 8, right: 12, left: -8, bottom: 0 }}
