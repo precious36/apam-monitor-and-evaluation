@@ -49,19 +49,35 @@ function SignOutIcon() {
   )
 }
 
-export default function Sidebar({ items, active, onSelect, user, onLogout }) {
+function CloseIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className="sidebar-close-icon">
+      <path d="M6.7 5.3 12 10.6l5.3-5.3 1.4 1.4L13.4 12l5.3 5.3-1.4 1.4L12 13.4l-5.3 5.3-1.4-1.4L10.6 12 5.3 6.7l1.4-1.4Z" />
+    </svg>
+  )
+}
+
+export default function Sidebar({ items, active, onSelect, user, onLogout, isOpen = false, onClose }) {
   const displayName = user?.userName || user?.email || 'Authenticated User'
   const roleLabel = getRoleLabel(user)
   const initials = getUserInitials(displayName)
 
   return (
-    <aside className="sidebar">
+    <aside id="app-sidebar" className={`sidebar ${isOpen ? 'is-open' : ''}`} aria-label="Primary navigation">
       <div className="sidebar-brand">
         <img className="brand-logo" src={apamLogo} alt="APAM logo" />
-        <div>
+        <div className="sidebar-brand-copy">
           <p className="brand-title">APAM Monitoring</p>
           <p className="brand-subtitle">Evaluation System</p>
         </div>
+        <button
+          type="button"
+          className="sidebar-close-btn"
+          aria-label="Close navigation menu"
+          onClick={onClose}
+        >
+          <CloseIcon />
+        </button>
       </div>
       <div className="sidebar-section">
         <p className="sidebar-section-title">Navigation</p>
