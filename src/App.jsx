@@ -1,4 +1,4 @@
-﻿import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import './App.css'
 import Sidebar from './components/Sidebar'
 import Topbar from './components/Topbar'
@@ -88,14 +88,49 @@ function App() {
   const [session, setSession] = useState(readStoredSession)
   const [activePage, setActivePage] = useState('Dashboard')
   const [isSignOutModalOpen, setIsSignOutModalOpen] = useState(false)
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false)
   const ActivePage = useMemo(() => PAGE_COMPONENTS[activePage], [activePage])
+
+  useEffect(() => {
+    if (typeof document === 'undefined') {
+      return undefined
+    }
+
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = isMobileNavOpen ? 'hidden' : previousOverflow
+
+    return () => {
+      document.body.style.overflow = previousOverflow
+    }
+  }, [isMobileNavOpen])
+
+  useEffect(() => {
+    if (!isMobileNavOpen || typeof window === 'undefined') {
+      return undefined
+    }
+
+    function handleKeyDown(event) {
+      if (event.key === 'Escape') {
+        setIsMobileNavOpen(false)
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [isMobileNavOpen])
 
   function handleLogin(nextSession) {
     storeSession(nextSession)
     setSession(nextSession)
   }
 
+  function handleSelectPage(page) {
+    setActivePage(page)
+    setIsMobileNavOpen(false)
+  }
+
   function handleLogoutRequest() {
+    setIsMobileNavOpen(false)
     setIsSignOutModalOpen(true)
   }
 
@@ -106,6 +141,7 @@ function App() {
   function handleConfirmLogout() {
     clearSession()
     setIsSignOutModalOpen(false)
+    setIsMobileNavOpen(false)
     setSession(null)
     notify.success('Signed out successfully.')
   }
@@ -119,11 +155,25 @@ function App() {
       <Sidebar
         items={NAV_ITEMS}
         active={activePage}
-        onSelect={setActivePage}
+        onSelect={handleSelectPage}
         user={session.user}
         onLogout={handleLogoutRequest}
+        isOpen={isMobileNavOpen}
+        onClose={() => setIsMobileNavOpen(false)}
       />
-      <Topbar activePage={activePage} />
+      {isMobileNavOpen ? (
+        <button
+          type="button"
+          className="mobile-nav-backdrop"
+          aria-label="Close navigation menu"
+          onClick={() => setIsMobileNavOpen(false)}
+        />
+      ) : null}
+      <Topbar
+        activePage={activePage}
+        isMobileNavOpen={isMobileNavOpen}
+        onToggleMobileNav={() => setIsMobileNavOpen((prev) => !prev)}
+      />
       <main className="app-main">
         <ActivePage session={session} />
       </main>
@@ -150,4 +200,3 @@ function App() {
 }
 
 export default App
-
