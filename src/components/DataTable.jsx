@@ -5,7 +5,7 @@
         <thead>
           <tr>
             {columns.map((col) => (
-              <th key={col.key || col.label} style={col.style}>
+              <th key={col.key || col.label} style={col.style} scope="col">
                 {col.label}
               </th>
             ))}
@@ -19,7 +19,10 @@
               className={onRowClick ? 'is-clickable' : ''}
             >
               {columns.map((col) => (
-                <td key={col.key || col.label}>
+                <td
+                  key={col.key || col.label}
+                  data-label={typeof col.label === 'string' ? col.label : String(col.key || '')}
+                >
                   {col.render ? col.render(row) : row[col.key]}
                 </td>
               ))}
