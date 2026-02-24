@@ -1,5 +1,6 @@
 ﻿.login-shell {
   min-height: 100vh;
+  min-height: 100dvh;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   background: var(--bg);
@@ -2312,15 +2313,18 @@
   }
 
   .login-hero {
-    min-height: 320px;
-    gap: 28px;
-    padding: 36px 24px 84px;
+    display: none;
   }
 
   .login-panel {
-    margin-top: -56px;
-    padding: 0 20px 24px;
-    background: transparent;
+    margin-top: 0;
+    min-height: 100dvh;
+    padding: 20px 18px;
+    background: linear-gradient(120deg, #f9faf8 0%, #eef3f8 100%);
+  }
+
+  .login-card {
+    width: min(520px, 100%);
   }
 }
 
@@ -2491,17 +2495,41 @@
     padding: 24px 18px;
   }
 
-  .login-hero {
-    padding: 24px 18px 72px;
-    gap: 18px;
-  }
-
   .login-highlight {
     display: none;
   }
 
+  .login-hero-title {
+    margin: 8px 0 10px;
+    font-size: 1.55rem;
+    line-height: 1.15;
+  }
+
+  .login-hero-subtitle {
+    font-size: 0.95rem;
+  }
+
+  .login-panel {
+    margin-top: 0;
+    padding: 0 12px 16px;
+  }
+
+  .login-card-header {
+    gap: 6px;
+  }
+
+  .login-logo {
+    width: 68px;
+    height: 68px;
+  }
+
   .login-title {
-    font-size: 1.65rem;
+    font-size: 1.5rem;
+    line-height: 1.12;
+  }
+
+  .login-submit {
+    min-height: 46px;
   }
 
   .notify-stack {
