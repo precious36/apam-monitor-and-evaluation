@@ -12,6 +12,7 @@ import Reports from './pages/Reports'
 import UsersSettings from './pages/UsersSettings'
 import Login from './pages/Login'
 import { useNotify } from './hooks/useNotify'
+import { filterAccessiblePages, getFirstAccessiblePage } from './lib/permissions'
 
 const AUTH_STORAGE_KEY = 'apam.me.auth'
 
@@ -89,6 +90,10 @@ function App() {
   const [activePage, setActivePage] = useState('Dashboard')
   const [isSignOutModalOpen, setIsSignOutModalOpen] = useState(false)
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false)
+  const visibleNavItems = useMemo(
+    () => (session ? filterAccessiblePages(NAV_ITEMS, session) : NAV_ITEMS),
+    [session],
+  )
   const ActivePage = useMemo(() => PAGE_COMPONENTS[activePage], [activePage])
 
   useEffect(() => {
@@ -119,9 +124,27 @@ function App() {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [isMobileNavOpen])
 
+  useEffect(() => {
+    if (!session) {
+      return
+    }
+
+    if (visibleNavItems.length === 0) {
+      return
+    }
+
+    if (!visibleNavItems.includes(activePage)) {
+      setActivePage(visibleNavItems[0])
+    }
+  }, [activePage, session, visibleNavItems])
+
   function handleLogin(nextSession) {
     storeSession(nextSession)
     setSession(nextSession)
+    const firstAccessiblePage = getFirstAccessiblePage(NAV_ITEMS, nextSession)
+    if (firstAccessiblePage) {
+      setActivePage(firstAccessiblePage)
+    }
   }
 
   function handleSelectPage(page) {
@@ -150,10 +173,53 @@ function App() {
     return <Login onLogin={handleLogin} />
   }
 
+  if (visibleNavItems.length === 0) {
+    return (
+      <div className="app-shell">
+        <main className="app-main">
+          <div className="page">
+            <div className="page-header">
+              <div>
+                <p className="eyebrow">Access control</p>
+                <h1 className="page-title">No features assigned</h1>
+                <p className="page-subtitle">
+                  Your account is signed in but has no feature permissions. Contact an administrator.
+                </p>
+              </div>
+              <div className="page-actions">
+                <Button variant="danger" onClick={handleLogoutRequest}>
+                  Sign out
+                </Button>
+              </div>
+            </div>
+          </div>
+        </main>
+        <Modal
+          open={isSignOutModalOpen}
+          title="Sign out"
+          subtitle="Are you sure you want to sign out?"
+          onClose={handleCancelLogout}
+          footer={
+            <div className="modal-actions modal-actions-split">
+              <Button variant="ghost" onClick={handleCancelLogout}>
+                Cancel
+              </Button>
+              <Button variant="danger" onClick={handleConfirmLogout}>
+                Sign out
+              </Button>
+            </div>
+          }
+        >
+          <p className="table-meta">You will need to sign in again to continue.</p>
+        </Modal>
+      </div>
+    )
+  }
+
   return (
     <div className="app-shell">
       <Sidebar
-        items={NAV_ITEMS}
+        items={visibleNavItems}
         active={activePage}
         onSelect={handleSelectPage}
         user={session.user}
