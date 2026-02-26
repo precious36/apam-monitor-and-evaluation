@@ -60,6 +60,10 @@ function getApiErrorMessage(payload, status, fallbackMessage) {
     return 'Your session has expired. Please sign in again.'
   }
 
+  if (status === 403) {
+    return 'You do not have permission to view this feature.'
+  }
+
   return fallbackMessage
 }
 
