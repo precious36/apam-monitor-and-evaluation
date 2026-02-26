@@ -5,6 +5,7 @@ import DataTable from '../components/DataTable'
 import Modal from '../components/Modal'
 import Tabs from '../components/Tabs'
 import { useNotify } from '../hooks/useNotify'
+import { hasPermission, PERMISSIONS } from '../lib/permissions'
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '')
 
@@ -14,6 +15,7 @@ const MANAGEMENT_TABS = [
   { id: 'users', label: 'Users' },
   { id: 'roles', label: 'Roles' },
 ]
+const EMPTY_PERMISSION_CATALOG = []
 
 const createEmptyForm = () => ({
   email: '',
@@ -37,6 +39,10 @@ const getApiErrorMessage = (payload, status, fallbackMessage) => {
 
   if (status === 401) {
     return 'Your session has expired. Please sign in again.'
+  }
+
+  if (status === 403) {
+    return 'You do not have permission to perform this action.'
   }
 
   return fallbackMessage
@@ -83,8 +89,11 @@ export default function UsersSettings({ session }) {
   const notify = useNotify()
   const [users, setUsers] = useState([])
   const [roles, setRoles] = useState([])
+  const [rolePermissionMap, setRolePermissionMap] = useState({})
+  const [permissionCatalog, setPermissionCatalog] = useState(EMPTY_PERMISSION_CATALOG)
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
+  const [isPermissionSaving, setIsPermissionSaving] = useState(false)
   const [pendingActionUserId, setPendingActionUserId] = useState('')
   const [pageError, setPageError] = useState('')
   const [saveError, setSaveError] = useState('')
@@ -95,6 +104,8 @@ export default function UsersSettings({ session }) {
   const [newRoleName, setNewRoleName] = useState('')
   const [isRoleSaving, setIsRoleSaving] = useState(false)
   const [pendingRoleName, setPendingRoleName] = useState('')
+  const [selectedRoleName, setSelectedRoleName] = useState('')
+  const [rolePermissionDraft, setRolePermissionDraft] = useState([])
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [formMode, setFormMode] = useState('create')
   const [activeUser, setActiveUser] = useState(null)
@@ -104,6 +115,23 @@ export default function UsersSettings({ session }) {
     const token = session?.accessToken
     return token ? { Authorization: `Bearer ${token}` } : {}
   }, [session?.accessToken])
+
+  const canViewUsers = hasPermission(session, PERMISSIONS.USERS_READ)
+  const canCreateUsers = hasPermission(session, PERMISSIONS.USERS_CREATE)
+  const canUpdateUsers = hasPermission(session, PERMISSIONS.USERS_UPDATE)
+  const canDeleteUsers = hasPermission(session, PERMISSIONS.USERS_DELETE)
+  const canViewRoles = hasPermission(session, PERMISSIONS.ROLES_READ)
+  const canCreateRoles = hasPermission(session, PERMISSIONS.ROLES_CREATE)
+  const canDeleteRoles = hasPermission(session, PERMISSIONS.ROLES_DELETE)
+  const canManageRolePermissions = hasPermission(session, PERMISSIONS.ROLES_MANAGE_PERMISSIONS)
+
+  const availableManagementTabs = useMemo(
+    () =>
+      MANAGEMENT_TABS.filter((tab) =>
+        tab.id === 'users' ? canViewUsers : canViewRoles,
+      ),
+    [canViewRoles, canViewUsers],
+  )
 
   const fetchUsers = useCallback(async () => {
     const response = await fetch(`${API_BASE_URL}/api/users`, {
@@ -126,12 +154,42 @@ export default function UsersSettings({ session }) {
       throw new Error(getApiErrorMessage(payload, response.status, 'Failed to load roles.'))
     }
 
-    const roleNames = (payload.data ?? [])
-      .map((role) => role.name)
-      .filter((roleName) => typeof roleName === 'string' && roleName.trim().length > 0)
-      .sort((a, b) => a.localeCompare(b))
+    const roleRecords = Array.isArray(payload.data) ? payload.data : []
+    const normalizedRoleRecords = roleRecords
+      .filter((role) => typeof role?.name === 'string' && role.name.trim().length > 0)
+      .map((role) => ({
+        name: role.name.trim(),
+        permissions: Array.isArray(role.permissions)
+          ? role.permissions
+              .map((permission) => String(permission ?? '').trim())
+              .filter(Boolean)
+              .sort((a, b) => a.localeCompare(b))
+          : [],
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name))
 
-    return roleNames
+    const roleNames = normalizedRoleRecords.map((role) => role.name)
+    const permissionsByRole = normalizedRoleRecords.reduce((accumulator, role) => {
+      accumulator[role.name] = role.permissions
+      return accumulator
+    }, {})
+
+    return {
+      roleNames,
+      permissionsByRole,
+    }
+  }, [authHeader])
+
+  const fetchPermissionCatalog = useCallback(async () => {
+    const response = await fetch(`${API_BASE_URL}/api/roles/permission-catalog`, {
+      headers: authHeader,
+    })
+    const payload = await response.json().catch(() => null)
+    if (!response.ok || !payload?.succeeded) {
+      throw new Error(getApiErrorMessage(payload, response.status, 'Failed to load permission catalog.'))
+    }
+
+    return Array.isArray(payload.data) ? payload.data : EMPTY_PERMISSION_CATALOG
   }, [authHeader])
 
   const loadUsersAndRoles = useCallback(async () => {
@@ -139,9 +197,25 @@ export default function UsersSettings({ session }) {
     setPageError('')
 
     try {
-      const [usersPayload, rolesPayload] = await Promise.all([fetchUsers(), fetchRoles()])
+      if (!canViewUsers && !canViewRoles) {
+        setUsers([])
+        setRoles([])
+        setRolePermissionMap({})
+        setPermissionCatalog(EMPTY_PERMISSION_CATALOG)
+        setPageError('You do not have permission to view users or roles.')
+        return
+      }
+
+      const [usersPayload, rolesPayload, permissionCatalogPayload] = await Promise.all([
+        canViewUsers ? fetchUsers() : Promise.resolve([]),
+        canViewRoles ? fetchRoles() : Promise.resolve({ roleNames: [], permissionsByRole: {} }),
+        canViewRoles ? fetchPermissionCatalog() : Promise.resolve(EMPTY_PERMISSION_CATALOG),
+      ])
+
       setUsers(usersPayload)
-      setRoles(rolesPayload)
+      setRoles(rolesPayload.roleNames)
+      setRolePermissionMap(rolesPayload.permissionsByRole)
+      setPermissionCatalog(permissionCatalogPayload)
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to load user management data.'
       setPageError(errorMessage)
@@ -149,11 +223,22 @@ export default function UsersSettings({ session }) {
     } finally {
       setIsLoading(false)
     }
-  }, [fetchRoles, fetchUsers, notify])
+  }, [canViewRoles, canViewUsers, fetchPermissionCatalog, fetchRoles, fetchUsers, notify])
 
   useEffect(() => {
     loadUsersAndRoles()
   }, [loadUsersAndRoles])
+
+  useEffect(() => {
+    if (availableManagementTabs.length === 0) {
+      return
+    }
+
+    const hasActiveTab = availableManagementTabs.some((tab) => tab.id === activeManagementTab)
+    if (!hasActiveTab) {
+      setActiveManagementTab(availableManagementTabs[0].id)
+    }
+  }, [activeManagementTab, availableManagementTabs])
 
   useEffect(() => {
     setFormValues((prev) => {
@@ -173,15 +258,46 @@ export default function UsersSettings({ session }) {
     })
   }, [roles])
 
+  useEffect(() => {
+    if (!canViewRoles || roles.length === 0) {
+      setSelectedRoleName('')
+      setRolePermissionDraft([])
+      return
+    }
+
+    if (!selectedRoleName || !roles.includes(selectedRoleName)) {
+      setSelectedRoleName(roles[0])
+    }
+  }, [canViewRoles, roles, selectedRoleName])
+
+  useEffect(() => {
+    if (!selectedRoleName) {
+      setRolePermissionDraft([])
+      return
+    }
+
+    setRolePermissionDraft(rolePermissionMap[selectedRoleName] ?? [])
+  }, [rolePermissionMap, selectedRoleName])
+
   const openCreateModal = useCallback(() => {
+    if (!canCreateUsers) {
+      notify.error('You do not have permission to create users.')
+      return
+    }
+
     setFormMode('create')
     setActiveUser(null)
     setSaveError('')
     setFormValues(createEmptyForm())
     setIsModalOpen(true)
-  }, [])
+  }, [canCreateUsers, notify])
 
   const openEditModal = useCallback((user) => {
+    if (!canUpdateUsers) {
+      notify.error('You do not have permission to update users.')
+      return
+    }
+
     setFormMode('edit')
     setActiveUser(user)
     setSaveError('')
@@ -196,7 +312,7 @@ export default function UsersSettings({ session }) {
       roles: Array.isArray(user.roles) ? user.roles : [],
     })
     setIsModalOpen(true)
-  }, [])
+  }, [canUpdateUsers, notify])
 
   const closeModal = useCallback((options = {}) => {
     const force = Boolean(options?.force)
@@ -229,6 +345,16 @@ export default function UsersSettings({ session }) {
   }
 
   const handleSaveUser = useCallback(async () => {
+    if (formMode === 'create' && !canCreateUsers) {
+      notify.error('You do not have permission to create users.')
+      return
+    }
+
+    if (formMode === 'edit' && !canUpdateUsers) {
+      notify.error('You do not have permission to update users.')
+      return
+    }
+
     const email = formValues.email.trim()
     if (!email) {
       const errorMessage = 'Email is required.'
@@ -332,9 +458,24 @@ export default function UsersSettings({ session }) {
     } finally {
       setIsSaving(false)
     }
-  }, [activeUser?.userId, authHeader, closeModal, formMode, formValues, loadUsersAndRoles, notify])
+  }, [
+    activeUser?.userId,
+    authHeader,
+    canCreateUsers,
+    canUpdateUsers,
+    closeModal,
+    formMode,
+    formValues,
+    loadUsersAndRoles,
+    notify,
+  ])
 
   const handleLockToggle = useCallback(async (user) => {
+    if (!canUpdateUsers) {
+      notify.error('You do not have permission to update users.')
+      return
+    }
+
     const userId = user?.userId
     if (!userId) {
       return
@@ -370,9 +511,14 @@ export default function UsersSettings({ session }) {
     } finally {
       setPendingActionUserId('')
     }
-  }, [authHeader, loadUsersAndRoles, notify])
+  }, [authHeader, canUpdateUsers, loadUsersAndRoles, notify])
 
   const handleDeleteUser = useCallback(async (user) => {
+    if (!canDeleteUsers) {
+      notify.error('You do not have permission to delete users.')
+      return
+    }
+
     const userId = user?.userId
     const userLabel = user?.userName || user?.email || 'this user'
     if (!userId) {
@@ -403,9 +549,14 @@ export default function UsersSettings({ session }) {
     } finally {
       setPendingActionUserId('')
     }
-  }, [authHeader, loadUsersAndRoles, notify])
+  }, [authHeader, canDeleteUsers, loadUsersAndRoles, notify])
 
   const handleCreateRole = useCallback(async () => {
+    if (!canCreateRoles) {
+      notify.error('You do not have permission to create roles.')
+      return
+    }
+
     const roleName = newRoleName.trim()
     if (roleName.length < MIN_ROLE_NAME_LENGTH) {
       notify.error(`Role name must be at least ${MIN_ROLE_NAME_LENGTH} characters.`)
@@ -445,9 +596,14 @@ export default function UsersSettings({ session }) {
     } finally {
       setIsRoleSaving(false)
     }
-  }, [authHeader, loadUsersAndRoles, newRoleName, notify, roles])
+  }, [authHeader, canCreateRoles, loadUsersAndRoles, newRoleName, notify, roles])
 
   const handleDeleteRole = useCallback(async (roleName) => {
+    if (!canDeleteRoles) {
+      notify.error('You do not have permission to delete roles.')
+      return
+    }
+
     const normalizedRoleName = String(roleName ?? '').trim()
     if (!normalizedRoleName) {
       return
@@ -486,7 +642,62 @@ export default function UsersSettings({ session }) {
       setPendingRoleName('')
       setIsRoleSaving(false)
     }
-  }, [authHeader, loadUsersAndRoles, notify, users])
+  }, [authHeader, canDeleteRoles, loadUsersAndRoles, notify, users])
+
+  const toggleRolePermission = useCallback((permissionKey) => {
+    setRolePermissionDraft((prev) => {
+      const normalizedKey = String(permissionKey ?? '').trim()
+      if (!normalizedKey) {
+        return prev
+      }
+
+      const hasSelected = prev.includes(normalizedKey)
+      const nextPermissions = hasSelected
+        ? prev.filter((permission) => permission !== normalizedKey)
+        : [...prev, normalizedKey]
+
+      return nextPermissions.sort((a, b) => a.localeCompare(b))
+    })
+  }, [])
+
+  const handleSaveRolePermissions = useCallback(async () => {
+    if (!canManageRolePermissions) {
+      notify.error('You do not have permission to manage role permissions.')
+      return
+    }
+
+    if (!selectedRoleName) {
+      notify.error('Select a role first.')
+      return
+    }
+
+    setIsPermissionSaving(true)
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/roles/${encodeURIComponent(selectedRoleName)}/permissions`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...authHeader,
+        },
+        body: JSON.stringify({
+          permissions: rolePermissionDraft,
+        }),
+      })
+
+      const payload = await response.json().catch(() => null)
+      if (!response.ok || !payload?.succeeded) {
+        throw new Error(getApiErrorMessage(payload, response.status, 'Failed to update role permissions.'))
+      }
+
+      await loadUsersAndRoles()
+      notify.success(`Permissions updated for ${selectedRoleName}.`)
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Failed to update role permissions.')
+    } finally {
+      setIsPermissionSaving(false)
+    }
+  }, [authHeader, canManageRolePermissions, loadUsersAndRoles, notify, rolePermissionDraft, selectedRoleName])
 
   const roleFilterOptions = useMemo(() => ['All', ...roles], [roles])
 
@@ -550,45 +761,95 @@ export default function UsersSettings({ session }) {
         render: (row) => {
           const isActionBusy = pendingActionUserId === row.source.userId
           const locked = row.status === 'Locked'
+          const hasRowActions = canUpdateUsers || canDeleteUsers
+
+          if (!hasRowActions) {
+            return <span className="table-meta">No actions</span>
+          }
 
           return (
             <div className="table-actions">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => openEditModal(row.source)}
-                disabled={isActionBusy || isSaving}
-              >
-                Edit
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handleLockToggle(row.source)}
-                disabled={isActionBusy || isSaving}
-              >
-                {locked ? 'Unlock' : 'Lock'}
-              </Button>
-              <Button
-                variant="danger"
-                size="sm"
-                onClick={() => handleDeleteUser(row.source)}
-                disabled={isActionBusy || isSaving}
-              >
-                Delete
-              </Button>
+              {canUpdateUsers ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => openEditModal(row.source)}
+                  disabled={isActionBusy || isSaving}
+                >
+                  Edit
+                </Button>
+              ) : null}
+              {canUpdateUsers ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleLockToggle(row.source)}
+                  disabled={isActionBusy || isSaving}
+                >
+                  {locked ? 'Unlock' : 'Lock'}
+                </Button>
+              ) : null}
+              {canDeleteUsers ? (
+                <Button
+                  variant="danger"
+                  size="sm"
+                  onClick={() => handleDeleteUser(row.source)}
+                  disabled={isActionBusy || isSaving}
+                >
+                  Delete
+                </Button>
+              ) : null}
             </div>
           )
         },
       },
     ],
-    [handleDeleteUser, handleLockToggle, isSaving, openEditModal, pendingActionUserId],
+    [canDeleteUsers, canUpdateUsers, handleDeleteUser, handleLockToggle, isSaving, openEditModal, pendingActionUserId],
   )
 
   const totalUsers = users.length
   const activeUsers = users.filter((user) => !isUserLocked(user)).length
   const lockedUsers = users.filter((user) => isUserLocked(user)).length
   const administrators = users.filter((user) => (user.roles ?? []).includes('Admin')).length
+  const selectedRoleAssignedUsersCount = selectedRoleName
+    ? users.filter((user) => (user.roles ?? []).includes(selectedRoleName)).length
+    : 0
+  const permissionFeatures = useMemo(() => {
+    const groupedPermissions = permissionCatalog.reduce((groups, permission) => {
+      const featureKey = permission.featureKey || 'other'
+      if (!groups.has(featureKey)) {
+        groups.set(featureKey, {
+          featureKey,
+          featureLabel: permission.featureLabel || permission.featureKey || 'Other',
+          permissions: [],
+        })
+      }
+
+      groups.get(featureKey).permissions.push(permission)
+      return groups
+    }, new Map())
+
+    return [...groupedPermissions.values()]
+      .map((group) => ({
+        ...group,
+        permissions: [...group.permissions].sort((a, b) => a.actionLabel.localeCompare(b.actionLabel)),
+      }))
+      .sort((a, b) => a.featureLabel.localeCompare(b.featureLabel))
+  }, [permissionCatalog])
+  const hasUnsavedRolePermissionChanges = useMemo(() => {
+    if (!selectedRoleName) {
+      return false
+    }
+
+    const current = [...(rolePermissionMap[selectedRoleName] ?? [])].sort()
+    const draft = [...rolePermissionDraft].sort()
+
+    if (current.length !== draft.length) {
+      return true
+    }
+
+    return current.some((permission, index) => permission !== draft[index])
+  }, [rolePermissionDraft, rolePermissionMap, selectedRoleName])
 
   return (
     <div className="page">
@@ -599,10 +860,14 @@ export default function UsersSettings({ session }) {
           <p className="page-subtitle">Manage user accounts, role assignments, and account status.</p>
         </div>
         <div className="page-actions">
-          <Button variant="outline" onClick={loadUsersAndRoles} disabled={isLoading || isSaving || isRoleSaving}>
+          <Button
+            variant="outline"
+            onClick={loadUsersAndRoles}
+            disabled={isLoading || isSaving || isRoleSaving || isPermissionSaving}
+          >
             Refresh
           </Button>
-          {activeManagementTab === 'users' ? <Button onClick={openCreateModal}>Add user</Button> : null}
+          {activeManagementTab === 'users' && canCreateUsers ? <Button onClick={openCreateModal}>Add user</Button> : null}
         </div>
       </div>
 
@@ -629,36 +894,44 @@ export default function UsersSettings({ session }) {
         className="reveal"
         title="Management"
         subtitle="Switch between user accounts and role administration."
-        action={<Tabs tabs={MANAGEMENT_TABS} active={activeManagementTab} onChange={setActiveManagementTab} />}
+        action={<Tabs tabs={availableManagementTabs} active={activeManagementTab} onChange={setActiveManagementTab} />}
       >
         {pageError ? (
           <p className="alert" role="alert">
             {pageError}
           </p>
         ) : null}
-        {activeManagementTab === 'users' ? (
+        {availableManagementTabs.length === 0 ? (
+          <p className="table-meta">No user or role management permissions assigned to your account.</p>
+        ) : activeManagementTab === 'users' ? (
           <>
+            {!canViewUsers ? (
+              <p className="table-meta">You do not have permission to view users.</p>
+            ) : null}
             <div className="filters-row">
               <input
                 type="search"
                 placeholder="Search by username, email, or role"
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
+                disabled={!canViewUsers}
               />
-              <select value={roleFilter} onChange={(event) => setRoleFilter(event.target.value)}>
+              <select value={roleFilter} onChange={(event) => setRoleFilter(event.target.value)} disabled={!canViewUsers}>
                 {roleFilterOptions.map((roleName) => (
                   <option key={roleName} value={roleName}>
                     {roleName === 'All' ? 'All roles' : roleName}
                   </option>
                 ))}
               </select>
-              <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+              <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} disabled={!canViewUsers}>
                 <option value="All">All statuses</option>
                 <option value="Active">Active</option>
                 <option value="Locked">Locked</option>
               </select>
             </div>
-            {isLoading ? (
+            {!canViewUsers ? (
+              <p className="table-meta">Users tab is unavailable for your account.</p>
+            ) : isLoading ? (
               <p className="table-meta">Loading users...</p>
             ) : userRows.length === 0 ? (
               <p className="table-meta">No users found for the selected filters.</p>
@@ -683,30 +956,123 @@ export default function UsersSettings({ session }) {
                   }}
                   placeholder="Enter role name"
                   minLength={MIN_ROLE_NAME_LENGTH}
+                  disabled={!canCreateRoles || isRoleSaving || isLoading}
                 />
               </label>
-              <Button onClick={handleCreateRole} disabled={isRoleSaving || isLoading}>
+              <Button onClick={handleCreateRole} disabled={!canCreateRoles || isRoleSaving || isLoading}>
                 {isRoleSaving ? 'Saving...' : 'Create role'}
               </Button>
             </div>
-            {roles.length === 0 ? (
+            {!canViewRoles ? (
+              <p className="table-meta">You do not have permission to view roles.</p>
+            ) : roles.length === 0 ? (
               <p className="table-meta">No roles available. Create a role to start assigning users.</p>
             ) : (
-              <div className="roles-list">
-                {roles.map((roleName) => (
-                  <div key={roleName} className="role-item">
-                    <span className="tag">{roleName}</span>
-                    <Button
-                      variant="danger"
-                      size="sm"
-                      onClick={() => handleDeleteRole(roleName)}
-                      disabled={isRoleSaving || pendingRoleName === roleName || isSaving}
-                    >
-                      {pendingRoleName === roleName ? 'Deleting...' : 'Delete'}
-                    </Button>
+              <>
+                <div className="roles-list">
+                  {roles.map((roleName) => {
+                    const permissionCount = (rolePermissionMap[roleName] ?? []).length
+
+                    return (
+                      <div key={roleName} className="role-item">
+                        <span className="tag">{roleName}</span>
+                        <span className="table-meta">{permissionCount} permission{permissionCount === 1 ? '' : 's'}</span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setSelectedRoleName(roleName)}
+                          disabled={isPermissionSaving}
+                        >
+                          {selectedRoleName === roleName ? 'Selected' : 'Manage access'}
+                        </Button>
+                        {canDeleteRoles ? (
+                          <Button
+                            variant="danger"
+                            size="sm"
+                            onClick={() => handleDeleteRole(roleName)}
+                            disabled={isRoleSaving || pendingRoleName === roleName || isSaving || isPermissionSaving}
+                          >
+                            {pendingRoleName === roleName ? 'Deleting...' : 'Delete'}
+                          </Button>
+                        ) : null}
+                      </div>
+                    )
+                  })}
+                </div>
+
+                {selectedRoleName ? (
+                  <div className="form-grid" style={{ marginTop: '1rem' }}>
+                    <div className="form-field form-field-full">
+                      <span>Selected role</span>
+                      <div className="filters-row">
+                        <select
+                          value={selectedRoleName}
+                          onChange={(event) => setSelectedRoleName(event.target.value)}
+                          disabled={isPermissionSaving}
+                        >
+                          {roles.map((roleName) => (
+                            <option key={roleName} value={roleName}>
+                              {roleName}
+                            </option>
+                          ))}
+                        </select>
+                        <Button
+                          variant="outline"
+                          onClick={() => setRolePermissionDraft(rolePermissionMap[selectedRoleName] ?? [])}
+                          disabled={isPermissionSaving || !hasUnsavedRolePermissionChanges}
+                        >
+                          Reset changes
+                        </Button>
+                        <Button
+                          onClick={handleSaveRolePermissions}
+                          disabled={!canManageRolePermissions || isPermissionSaving || !hasUnsavedRolePermissionChanges}
+                        >
+                          {isPermissionSaving ? 'Saving access...' : 'Save role access'}
+                        </Button>
+                      </div>
+                      <p className="table-meta">
+                        {selectedRoleName} is assigned to {selectedRoleAssignedUsersCount} user{selectedRoleAssignedUsersCount === 1 ? '' : 's'}.
+                        {canManageRolePermissions
+                          ? ' Select what this role can do per feature.'
+                          : ' You can view permissions but cannot change them.'}
+                      </p>
+                    </div>
+
+                    {permissionFeatures.length === 0 ? (
+                      <p className="table-meta">No permission catalog available.</p>
+                    ) : (
+                      permissionFeatures.map((featureGroup) => (
+                        <div key={featureGroup.featureKey} className="form-field form-field-full">
+                          <span>{featureGroup.featureLabel}</span>
+                          <div className="checkbox-group">
+                            {featureGroup.permissions.map((permission) => (
+                              <label key={permission.key} className="checkbox-option" title={permission.description || ''}>
+                                <input
+                                  type="checkbox"
+                                  checked={rolePermissionDraft.includes(permission.key)}
+                                  onChange={() => toggleRolePermission(permission.key)}
+                                  disabled={!canManageRolePermissions || isPermissionSaving}
+                                />
+                                <span>{permission.actionLabel}</span>
+                              </label>
+                            ))}
+                          </div>
+                          {featureGroup.permissions.some((permission) => permission.description) ? (
+                            <p className="table-meta">
+                              {featureGroup.permissions
+                                .map((permission) =>
+                                  permission.description ? `${permission.actionLabel}: ${permission.description}` : null,
+                                )
+                                .filter(Boolean)
+                                .join(' ')}
+                            </p>
+                          ) : null}
+                        </div>
+                      ))
+                    )}
                   </div>
-                ))}
-              </div>
+                ) : null}
+              </>
             )}
           </>
         )}
@@ -726,7 +1092,13 @@ export default function UsersSettings({ session }) {
             <Button variant="ghost" onClick={closeModal} disabled={isSaving}>
               Cancel
             </Button>
-            <Button onClick={handleSaveUser} disabled={isSaving}>
+            <Button
+              onClick={handleSaveUser}
+              disabled={
+                isSaving ||
+                (formMode === 'create' ? !canCreateUsers : !canUpdateUsers)
+              }
+            >
               {isSaving ? 'Saving...' : formMode === 'create' ? 'Create user' : 'Save changes'}
             </Button>
           </div>
@@ -745,6 +1117,7 @@ export default function UsersSettings({ session }) {
               value={formValues.email}
               onChange={updateField('email')}
               placeholder="name@organization.org"
+              disabled={formMode === 'create' ? !canCreateUsers : !canUpdateUsers}
               required
             />
           </label>
@@ -755,6 +1128,7 @@ export default function UsersSettings({ session }) {
               value={formValues.userName}
               onChange={updateField('userName')}
               placeholder="Leave blank to use email"
+              disabled={formMode === 'create' ? !canCreateUsers : !canUpdateUsers}
             />
           </label>
           {formMode === 'create' ? (
@@ -766,6 +1140,7 @@ export default function UsersSettings({ session }) {
                 onChange={updateField('password')}
                 placeholder="Minimum 8 characters"
                 minLength={8}
+                disabled={!canCreateUsers}
                 required
               />
             </label>
@@ -777,6 +1152,7 @@ export default function UsersSettings({ session }) {
               value={formValues.phoneNumber}
               onChange={updateField('phoneNumber')}
               placeholder="Optional"
+              disabled={formMode === 'create' ? !canCreateUsers : !canUpdateUsers}
             />
           </label>
           <label className="checkbox-option">
@@ -784,6 +1160,7 @@ export default function UsersSettings({ session }) {
               type="checkbox"
               checked={formValues.emailConfirmed}
               onChange={updateField('emailConfirmed')}
+              disabled={formMode === 'create' ? !canCreateUsers : !canUpdateUsers}
             />
             <span>Email confirmed</span>
           </label>
@@ -794,6 +1171,7 @@ export default function UsersSettings({ session }) {
                   type="checkbox"
                   checked={formValues.twoFactorEnabled}
                   onChange={updateField('twoFactorEnabled')}
+                  disabled={!canUpdateUsers}
                 />
                 <span>Two-factor enabled</span>
               </label>
@@ -802,6 +1180,7 @@ export default function UsersSettings({ session }) {
                   type="checkbox"
                   checked={formValues.lockoutEnabled}
                   onChange={updateField('lockoutEnabled')}
+                  disabled={!canUpdateUsers}
                 />
                 <span>Lockout enabled</span>
               </label>
@@ -819,6 +1198,7 @@ export default function UsersSettings({ session }) {
                       type="checkbox"
                       checked={formValues.roles.includes(roleName)}
                       onChange={toggleRole(roleName)}
+                      disabled={formMode === 'create' ? !canCreateUsers : !canUpdateUsers}
                     />
                     <span>{roleName}</span>
                   </label>
