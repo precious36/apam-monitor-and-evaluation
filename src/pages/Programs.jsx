@@ -85,6 +85,10 @@ const getApiErrorMessage = (payload, status, fallbackMessage) => {
     return 'Your session has expired. Please sign in again.'
   }
 
+  if (status === 403) {
+    return 'You do not have permission to perform this action.'
+  }
+
   return fallbackMessage
 }
 
