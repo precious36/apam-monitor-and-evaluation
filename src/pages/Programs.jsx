@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Card from '../components/Card'
 import Button from '../components/Button'
 import DataTable from '../components/DataTable'
@@ -22,6 +22,8 @@ const createEmptyProgramForm = () => ({
   startDate: '',
   endDate: '',
   projectGoal: '',
+  assignMembers: false,
+  memberIds: [],
   objectives: [''],
   activities: [''],
   indicators: [createEmptyIndicator()],
@@ -131,6 +133,10 @@ const mapProgramToForm = (program) => {
     startDate: formatDateForInput(program.startDate),
     endDate: formatDateForInput(program.endDate),
     projectGoal: program.projectGoal ?? '',
+    assignMembers: Boolean(program.hasMemberAssignments) || (program.members ?? []).length > 0,
+    memberIds: (program.members ?? [])
+      .map((entry) => Number(entry.memberId))
+      .filter((memberId) => Number.isInteger(memberId) && memberId > 0),
     objectives: objectives.length > 0 ? objectives : [''],
     activities: activities.length > 0 ? activities : [''],
     indicators: indicators.length > 0 ? indicators : [createEmptyIndicator()],
@@ -140,18 +146,22 @@ const mapProgramToForm = (program) => {
 export default function Programs({ session }) {
   const notify = useNotify()
   const [programs, setPrograms] = useState([])
+  const [memberOptions, setMemberOptions] = useState([])
   const [selectedProgramId, setSelectedProgramId] = useState(null)
   const [isProgramDetailVisible, setIsProgramDetailVisible] = useState(false)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingProgramId, setEditingProgramId] = useState(null)
   const [formValues, setFormValues] = useState(() => createEmptyProgramForm())
   const [isLoading, setIsLoading] = useState(true)
+  const [isMemberOptionsLoading, setIsMemberOptionsLoading] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [pageError, setPageError] = useState('')
   const [saveError, setSaveError] = useState('')
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState('All')
   const [organizationFilter, setOrganizationFilter] = useState('All')
+  const [isMemberDropdownOpen, setIsMemberDropdownOpen] = useState(false)
+  const memberDropdownRef = useRef(null)
 
   const authHeader = useMemo(() => {
     const token = session?.accessToken
@@ -166,6 +176,19 @@ export default function Programs({ session }) {
     const payload = await response.json().catch(() => null)
     if (!response.ok || !payload?.succeeded) {
       throw new Error(getApiErrorMessage(payload, response.status, 'Failed to load programs.'))
+    }
+
+    return payload.data ?? []
+  }, [authHeader])
+
+  const fetchMemberOptions = useCallback(async () => {
+    const response = await fetch(`${API_BASE_URL}/api/programs/member-options`, {
+      headers: authHeader,
+    })
+
+    const payload = await response.json().catch(() => null)
+    if (!response.ok || !payload?.succeeded) {
+      throw new Error(getApiErrorMessage(payload, response.status, 'Failed to load member options.'))
     }
 
     return payload.data ?? []
@@ -191,6 +214,25 @@ export default function Programs({ session }) {
   useEffect(() => {
     loadPrograms()
   }, [loadPrograms])
+
+  const loadMemberOptions = useCallback(async () => {
+    setIsMemberOptionsLoading(true)
+
+    try {
+      const memberOptionsPayload = await fetchMemberOptions()
+      setMemberOptions(memberOptionsPayload)
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to load members for assignment.'
+      setMemberOptions([])
+      notify.error(errorMessage)
+    } finally {
+      setIsMemberOptionsLoading(false)
+    }
+  }, [fetchMemberOptions, notify])
+
+  useEffect(() => {
+    loadMemberOptions()
+  }, [loadMemberOptions])
 
   useEffect(() => {
     if (programs.length === 0) {
@@ -346,13 +388,18 @@ export default function Programs({ session }) {
     setSaveError('')
     setEditingProgramId(null)
     setFormValues(createEmptyProgramForm())
+    setIsMemberDropdownOpen(false)
   }
 
   const openCreateModal = () => {
     setSaveError('')
     setEditingProgramId(null)
     setFormValues(createEmptyProgramForm())
+    setIsMemberDropdownOpen(false)
     setIsModalOpen(true)
+    if (memberOptions.length === 0) {
+      loadMemberOptions()
+    }
   }
 
   const openEditModal = (program) => {
@@ -363,13 +410,85 @@ export default function Programs({ session }) {
     setSaveError('')
     setEditingProgramId(program.programId)
     setFormValues(mapProgramToForm(program))
+    setIsMemberDropdownOpen(false)
     setIsModalOpen(true)
+    if (memberOptions.length === 0) {
+      loadMemberOptions()
+    }
   }
 
   const updateField = (field) => (event) => {
     const { value } = event.target
     setFormValues((prev) => ({ ...prev, [field]: value }))
   }
+
+  const updateAssignMembers = (event) => {
+    const shouldAssignMembers = event.target.value === 'Yes'
+    setFormValues((prev) => ({
+      ...prev,
+      assignMembers: shouldAssignMembers,
+      memberIds: shouldAssignMembers ? prev.memberIds : [],
+    }))
+    if (!shouldAssignMembers) {
+      setIsMemberDropdownOpen(false)
+    }
+  }
+
+  const toggleAssignedMember = (memberId) => () => {
+    const numericMemberId = Number(memberId)
+    if (!Number.isInteger(numericMemberId) || numericMemberId <= 0) {
+      return
+    }
+
+    setFormValues((prev) => {
+      const hasSelected = prev.memberIds.includes(numericMemberId)
+      const nextMemberIds = hasSelected
+        ? prev.memberIds.filter((value) => value !== numericMemberId)
+        : [...prev.memberIds, numericMemberId]
+
+      return {
+        ...prev,
+        memberIds: nextMemberIds.sort((valueA, valueB) => valueA - valueB),
+      }
+    })
+  }
+
+  const selectedMembersSummary = useMemo(() => {
+    if (formValues.memberIds.length === 0) {
+      return 'Select members'
+    }
+
+    const selectedNames = memberOptions
+      .filter((member) => formValues.memberIds.includes(Number(member.memberId)))
+      .map((member) => member.fullName)
+
+    if (selectedNames.length === 0) {
+      return `${formValues.memberIds.length} selected`
+    }
+
+    if (selectedNames.length <= 2) {
+      return selectedNames.join(', ')
+    }
+
+    return `${selectedNames.length} members selected`
+  }, [formValues.memberIds, memberOptions])
+
+  useEffect(() => {
+    if (!isMemberDropdownOpen) {
+      return
+    }
+
+    const handleDocumentMouseDown = (event) => {
+      if (memberDropdownRef.current && !memberDropdownRef.current.contains(event.target)) {
+        setIsMemberDropdownOpen(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleDocumentMouseDown)
+    return () => {
+      document.removeEventListener('mousedown', handleDocumentMouseDown)
+    }
+  }, [isMemberDropdownOpen])
 
   const updateListField = (field, index) => (event) => {
     const { value } = event.target
@@ -492,12 +611,18 @@ export default function Programs({ session }) {
       throw new Error('Add at least one unique indicator.')
     }
 
+    if (formValues.assignMembers && formValues.memberIds.length === 0) {
+      throw new Error('Select at least one member or choose not to assign members.')
+    }
+
     return {
       organizationName,
       projectName,
       startDate,
       endDate,
       projectGoal: formValues.projectGoal.trim() || null,
+      assignMembers: formValues.assignMembers,
+      memberIds: formValues.assignMembers ? formValues.memberIds : [],
       objectives,
       activities,
       indicators,
@@ -629,7 +754,7 @@ export default function Programs({ session }) {
         </Card>
       </section>
 
-      <div className={`cases-layout ${isProgramDetailVisible && selectedProgram ? '' : 'cases-layout-single'}`.trim()}>
+      <div className="cases-layout cases-layout-single">
         <Card className="reveal">
           {pageError ? (
             <p className="alert" role="alert">
@@ -671,106 +796,131 @@ export default function Programs({ session }) {
           )}
         </Card>
 
-        {isProgramDetailVisible && selectedProgram ? (
-          <Card title="Program detail" subtitle="Project summary and results framework" className="reveal">
-            <div className="case-detail">
+      </div>
+
+      <Modal
+        open={isProgramDetailVisible && Boolean(selectedProgram)}
+        title="Program detail"
+        subtitle="Project summary and results framework"
+        onClose={handleCloseProgramDetail}
+        footer={
+          selectedProgram ? (
+            <div className="modal-actions">
+              <Button variant="ghost" onClick={handleCloseProgramDetail} disabled={isSaving}>
+                Close
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  handleCloseProgramDetail()
+                  openEditModal(selectedProgram)
+                }}
+                disabled={isSaving}
+              >
+                Edit program
+              </Button>
+              <Button variant="danger" onClick={handleDeleteProgram} disabled={isSaving}>
+                Delete program
+              </Button>
+            </div>
+          ) : null
+        }
+      >
+        {selectedProgram ? (
+          <div className="case-detail">
+            <div>
+              <p className="info-label">Project information</p>
+              <p className="info-value">
+                {toDisplayValue(selectedProgram.projectName)} ({toDisplayValue(selectedProgram.programCode)})
+              </p>
+              <p className="info-meta">{toDisplayValue(selectedProgram.organizationName)}</p>
+            </div>
+
+            <div className="info-grid">
               <div>
-                <p className="info-label">Project information</p>
-                <p className="info-value">
-                  {toDisplayValue(selectedProgram.projectName)} ({toDisplayValue(selectedProgram.programCode)})
-                </p>
-                <p className="info-meta">{toDisplayValue(selectedProgram.organizationName)}</p>
-              </div>
-
-              <div className="info-grid">
-                <div>
-                  <p className="info-label">Status</p>
-                  <StatusPill value={selectedProgram.programStatus} />
-                </div>
-                <div>
-                  <p className="info-label">Start date</p>
-                  <p className="info-value">{formatDateValue(selectedProgram.startDate)}</p>
-                </div>
-                <div>
-                  <p className="info-label">End date</p>
-                  <p className="info-value">{formatDateValue(selectedProgram.endDate)}</p>
-                </div>
-                <div>
-                  <p className="info-label">Organization</p>
-                  <p className="info-value">{toDisplayValue(selectedProgram.organizationName)}</p>
-                </div>
-              </div>
-
-              <div>
-                <p className="info-label">Project goal</p>
-                <p className="info-value">{toDisplayValue(selectedProgram.projectGoal)}</p>
-              </div>
-
-              <div>
-                <p className="info-label">Objectives</p>
-                {selectedProgram.objectives?.length ? (
-                  <ul className="detail-list">
-                    {selectedProgram.objectives.map((objective) => (
-                      <li key={objective.programObjectiveId || objective.sortOrder}>
-                        {objective.objective}
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="info-value">Not provided</p>
-                )}
-              </div>
-
-              <div>
-                <p className="info-label">Activities</p>
-                {selectedProgram.activities?.length ? (
-                  <ul className="detail-list">
-                    {selectedProgram.activities.map((activity) => (
-                      <li key={activity.programActivityId || activity.sortOrder}>
-                        {activity.activity}
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="info-value">Not provided</p>
-                )}
-              </div>
-
-              <div>
-                <p className="info-label">Indicators and targets</p>
-                {selectedProgram.indicators?.length ? (
-                  <ul className="detail-list">
-                    {selectedProgram.indicators.map((indicator) => (
-                      <li key={indicator.programIndicatorId || indicator.sortOrder}>
-                        <strong>{indicator.indicator}</strong>
-                        <p className="info-meta">Target: {toDisplayValue(indicator.target)}</p>
-                        <p className="info-meta">Output/Outcome: {toDisplayValue(indicator.outputOrOutcome)}</p>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="info-value">Not provided</p>
-                )}
-              </div>
-
-              <div className="case-detail-actions">
+                <p className="info-label">Status</p>
                 <StatusPill value={selectedProgram.programStatus} />
-                <div className="table-actions">
-                  <Button variant="ghost" onClick={handleCloseProgramDetail} disabled={isSaving}>
-                    Close detail
-                  </Button>
-                  <Button variant="outline" onClick={() => openEditModal(selectedProgram)} disabled={isSaving}>
-                    Edit program
-                  </Button>
-                  <Button variant="danger" onClick={handleDeleteProgram} disabled={isSaving}>
-                    Delete program
-                  </Button>
-                </div>
+              </div>
+              <div>
+                <p className="info-label">Start date</p>
+                <p className="info-value">{formatDateValue(selectedProgram.startDate)}</p>
+              </div>
+              <div>
+                <p className="info-label">End date</p>
+                <p className="info-value">{formatDateValue(selectedProgram.endDate)}</p>
+              </div>
+              <div>
+                <p className="info-label">Organization</p>
+                <p className="info-value">{toDisplayValue(selectedProgram.organizationName)}</p>
               </div>
             </div>
-          </Card>
+
+            <div>
+              <p className="info-label">Project goal</p>
+              <p className="info-value">{toDisplayValue(selectedProgram.projectGoal)}</p>
+            </div>
+
+            <div>
+              <p className="info-label">Objectives</p>
+              {selectedProgram.objectives?.length ? (
+                <ul className="detail-list">
+                  {selectedProgram.objectives.map((objective) => (
+                    <li key={objective.programObjectiveId || objective.sortOrder}>{objective.objective}</li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="info-value">Not provided</p>
+              )}
+            </div>
+
+            <div>
+              <p className="info-label">Activities</p>
+              {selectedProgram.activities?.length ? (
+                <ul className="detail-list">
+                  {selectedProgram.activities.map((activity) => (
+                    <li key={activity.programActivityId || activity.sortOrder}>{activity.activity}</li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="info-value">Not provided</p>
+              )}
+            </div>
+
+            <div>
+              <p className="info-label">Indicators and targets</p>
+              {selectedProgram.indicators?.length ? (
+                <ul className="detail-list">
+                  {selectedProgram.indicators.map((indicator) => (
+                    <li key={indicator.programIndicatorId || indicator.sortOrder}>
+                      <strong>{indicator.indicator}</strong>
+                      <p className="info-meta">Target: {toDisplayValue(indicator.target)}</p>
+                      <p className="info-meta">Output/Outcome: {toDisplayValue(indicator.outputOrOutcome)}</p>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="info-value">Not provided</p>
+              )}
+            </div>
+
+            <div>
+              <p className="info-label">Assigned members</p>
+              {selectedProgram.members?.length ? (
+                <ul className="detail-list">
+                  {selectedProgram.members.map((member) => (
+                    <li key={member.programMemberId || member.memberId}>
+                      {toDisplayValue(member.fullName)} ({toDisplayValue(member.memberCode)})
+                      <p className="info-meta">District: {toDisplayValue(member.district)}</p>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="info-value">No members assigned to this program.</p>
+              )}
+            </div>
+          </div>
         ) : null}
-      </div>
+      </Modal>
 
       <Modal
         open={isModalOpen}
@@ -835,6 +985,54 @@ export default function Programs({ session }) {
               placeholder="Overall goal of the project"
             />
           </label>
+
+          <div className="form-field form-field-full">
+            <span>Add members to this program?</span>
+            <select value={formValues.assignMembers ? 'Yes' : 'No'} onChange={updateAssignMembers}>
+              <option value="No">No</option>
+              <option value="Yes">Yes</option>
+            </select>
+            {formValues.assignMembers ? (
+              isMemberOptionsLoading ? (
+                <p className="table-meta">Loading members...</p>
+              ) : memberOptions.length === 0 ? (
+                <p className="table-meta">No members available for assignment.</p>
+              ) : (
+                <div className="member-dropdown" ref={memberDropdownRef}>
+                  <button
+                    type="button"
+                    className="member-dropdown-toggle"
+                    onClick={() => setIsMemberDropdownOpen((prev) => !prev)}
+                    aria-expanded={isMemberDropdownOpen}
+                  >
+                    <span>{selectedMembersSummary}</span>
+                    <span>{isMemberDropdownOpen ? '▲' : '▼'}</span>
+                  </button>
+                  {isMemberDropdownOpen ? (
+                    <div className="member-dropdown-menu">
+                      <div className="checkbox-group">
+                        {memberOptions.map((member) => (
+                          <label className="checkbox-option" key={member.memberId}>
+                            <input
+                              type="checkbox"
+                              checked={formValues.memberIds.includes(member.memberId)}
+                              onChange={toggleAssignedMember(member.memberId)}
+                            />
+                            <span>
+                              {member.memberCode} - {member.fullName} ({toDisplayValue(member.district)})
+                            </span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                  <p className="table-meta">Open the dropdown and tick members to assign.</p>
+                </div>
+              )
+            ) : (
+              <p className="table-meta">This program will be saved without member assignments.</p>
+            )}
+          </div>
 
           <div className="form-field form-field-full repeatable-section">
             <div className="repeatable-header">
