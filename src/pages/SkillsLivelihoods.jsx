@@ -38,7 +38,8 @@ const skills = [
 
 export default function SkillsLivelihoods() {
   const [activeTab, setActiveTab] = useState('skills')
-  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [selectedSkill, setSelectedSkill] = useState(null)
+  const [isAddSkillModalOpen, setIsAddSkillModalOpen] = useState(false)
 
   const columns = [
     { key: 'skill', label: 'Skill' },
@@ -48,9 +49,9 @@ export default function SkillsLivelihoods() {
     {
       key: 'actions',
       label: 'Actions',
-      render: () => (
+      render: (row) => (
         <div className="table-actions">
-          <Button variant="ghost" size="sm">
+          <Button variant="ghost" size="sm" onClick={() => setSelectedSkill(row)}>
             View
           </Button>
           <Button variant="outline" size="sm">
@@ -105,7 +106,7 @@ export default function SkillsLivelihoods() {
         <Card
           title="Skills inventory"
           subtitle="Current skills, experience, and certification"
-          action={<Button onClick={() => setIsModalOpen(true)}>Add skill</Button>}
+          action={<Button onClick={() => setIsAddSkillModalOpen(true)}>Add skill</Button>}
           className="reveal"
         >
           <DataTable columns={columns} rows={skills} />
@@ -181,13 +182,48 @@ export default function SkillsLivelihoods() {
       )}
 
       <Modal
-        open={isModalOpen}
-        title="Add skill"
-        subtitle="Capture skill level and certification"
-        onClose={() => setIsModalOpen(false)}
+        open={Boolean(selectedSkill)}
+        title={selectedSkill ? `${selectedSkill.skill} details` : 'Skill details'}
+        subtitle="Skill record summary"
+        onClose={() => setSelectedSkill(null)}
         footer={
           <div className="modal-actions">
-            <Button variant="ghost" onClick={() => setIsModalOpen(false)}>
+            <Button variant="ghost" onClick={() => setSelectedSkill(null)}>
+              Close
+            </Button>
+          </div>
+        }
+      >
+        {selectedSkill ? (
+          <div className="form-grid">
+            <div className="form-field">
+              <span>Skill name</span>
+              <strong>{selectedSkill.skill}</strong>
+            </div>
+            <div className="form-field">
+              <span>Skill level</span>
+              <strong>{selectedSkill.level}</strong>
+            </div>
+            <div className="form-field">
+              <span>Years of experience</span>
+              <strong>{selectedSkill.experience}</strong>
+            </div>
+            <div className="form-field">
+              <span>Certification</span>
+              <strong>{selectedSkill.certification}</strong>
+            </div>
+          </div>
+        ) : null}
+      </Modal>
+
+      <Modal
+        open={isAddSkillModalOpen}
+        title="Add skill"
+        subtitle="Capture skill level and certification"
+        onClose={() => setIsAddSkillModalOpen(false)}
+        footer={
+          <div className="modal-actions">
+            <Button variant="ghost" onClick={() => setIsAddSkillModalOpen(false)}>
               Cancel
             </Button>
             <Button>Save skill</Button>
