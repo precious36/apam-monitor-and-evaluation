@@ -371,6 +371,10 @@ export default function Cases({ session }) {
     setIsCaseDetailVisible(true)
   }
 
+  const closeCaseDetail = () => {
+    setIsCaseDetailVisible(false)
+  }
+
   const columns = useMemo(
     () => [
       { key: 'caseCode', label: 'Case ID' },
@@ -623,7 +627,7 @@ export default function Cases({ session }) {
         </Card>
       </section>
 
-      <div className={`cases-layout ${isCaseDetailVisible && selectedCase ? '' : 'cases-layout-single'}`.trim()}>
+      <div className="cases-layout cases-layout-single">
         <Card className="reveal">
           {pageError ? (
             <p className="alert" role="alert">
@@ -665,106 +669,124 @@ export default function Cases({ session }) {
           )}
         </Card>
 
-        {isCaseDetailVisible && selectedCase ? (
-          <Card title="Case detail" subtitle="Incident and response summary" className="reveal">
-            <div className="case-detail">
+      </div>
+
+      <Modal
+        open={isCaseDetailVisible && Boolean(selectedCase)}
+        title="Case detail"
+        subtitle="Incident and response summary"
+        onClose={closeCaseDetail}
+        footer={
+          selectedCase ? (
+            <div className="modal-actions">
+              <Button variant="ghost" onClick={closeCaseDetail}>
+                Close
+              </Button>
+              <Button
+                onClick={() => {
+                  closeCaseDetail()
+                  openStatusModal()
+                }}
+              >
+                Update case status
+              </Button>
+            </div>
+          ) : null
+        }
+      >
+        {selectedCase ? (
+          <div className="case-detail">
+            <div>
+              <p className="info-label">Incident information</p>
+              <p className="info-value">
+                {toDisplayValue(selectedCase.caseType)} reported in {toDisplayValue(selectedCase.district)}.
+              </p>
+              <p className="info-meta">
+                {toDisplayValue(selectedCase.caseCode)} - Date {formatDateValue(selectedCase.caseDate)} - Police
+                officer {toDisplayValue(selectedCase.policeOfficerName)}
+              </p>
+            </div>
+
+            <div className="info-grid">
               <div>
-                <p className="info-label">Incident information</p>
-                <p className="info-value">
-                  {toDisplayValue(selectedCase.caseType)} reported in {toDisplayValue(selectedCase.district)}.
-                </p>
-                <p className="info-meta">
-                  {toDisplayValue(selectedCase.caseCode)} - Date {formatDateValue(selectedCase.caseDate)} - Police
-                  officer {toDisplayValue(selectedCase.policeOfficerName)}
-                </p>
+                <p className="info-label">Case serial #</p>
+                <p className="info-value">{toDisplayValue(selectedCase.caseSerialNumber)}</p>
               </div>
-
-              <div className="info-grid">
-                <div>
-                  <p className="info-label">Case serial #</p>
-                  <p className="info-value">{toDisplayValue(selectedCase.caseSerialNumber)}</p>
-                </div>
-                <div>
-                  <p className="info-label">District</p>
-                  <p className="info-value">{toDisplayValue(selectedCase.district)}</p>
-                </div>
-                <div>
-                  <p className="info-label">Location</p>
-                  <p className="info-value">{toDisplayValue(selectedCase.location)}</p>
-                </div>
-                <div>
-                  <p className="info-label">Case status</p>
-                  <StatusPill value={selectedCase.caseStatus} />
-                </div>
-                <div>
-                  <p className="info-label">Reporter</p>
-                  <p className="info-value">{toDisplayValue(selectedCase.reporterName)}</p>
-                </div>
-                <div>
-                  <p className="info-label">Police officer</p>
-                  <p className="info-value">{toDisplayValue(selectedCase.policeOfficerName)}</p>
-                </div>
-              </div>
-
               <div>
-                <p className="info-label">Victim / deceased</p>
-                <ul className="detail-list">
-                  <li>Name/details: {toDisplayValue(selectedCase.memberName || selectedCase.victimOrDeceased)}</li>
-                  <li>Member code: {toDisplayValue(selectedCase.memberCode || formatMemberCode(selectedCase.memberId))}</li>
-                </ul>
+                <p className="info-label">District</p>
+                <p className="info-value">{toDisplayValue(selectedCase.district)}</p>
               </div>
-
               <div>
-                <p className="info-label">Modus</p>
-                <p className="info-value">{toDisplayValue(selectedCase.modus)}</p>
+                <p className="info-label">Location</p>
+                <p className="info-value">{toDisplayValue(selectedCase.location)}</p>
               </div>
-
               <div>
-                <p className="info-label">Support</p>
-                <p className="info-value">{toDisplayValue(selectedCase.support)}</p>
-              </div>
-
-              <div>
-                <p className="info-label">Suspects</p>
-                {suspects.length > 0 ? (
-                  <ul className="detail-list">
-                    {suspects.map((suspect) => (
-                      <li key={suspect}>{suspect}</li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="info-value">Not provided</p>
-                )}
-              </div>
-
-              <div>
-                <p className="info-label">Timeline and status updates</p>
-                {statusUpdates.length > 0 ? (
-                  <ul className="timeline">
-                    {statusUpdates.map((update) => (
-                      <li key={update.caseStatusUpdateId}>
-                        <span>{formatDateTimeValue(update.updatedAtUtc)}</span>
-                        <p>
-                          <strong>{update.caseStatus}</strong>
-                          {update.updatedBy ? ` - by ${update.updatedBy}` : ''}
-                        </p>
-                        {update.statusNotes ? <p>{update.statusNotes}</p> : null}
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="info-value">No status updates yet.</p>
-                )}
-              </div>
-
-              <div className="case-detail-actions">
+                <p className="info-label">Case status</p>
                 <StatusPill value={selectedCase.caseStatus} />
-                <Button onClick={openStatusModal}>Update case status</Button>
+              </div>
+              <div>
+                <p className="info-label">Reporter</p>
+                <p className="info-value">{toDisplayValue(selectedCase.reporterName)}</p>
+              </div>
+              <div>
+                <p className="info-label">Police officer</p>
+                <p className="info-value">{toDisplayValue(selectedCase.policeOfficerName)}</p>
               </div>
             </div>
-          </Card>
+
+            <div>
+              <p className="info-label">Victim / deceased</p>
+              <ul className="detail-list">
+                <li>Name/details: {toDisplayValue(selectedCase.memberName || selectedCase.victimOrDeceased)}</li>
+                <li>Member code: {toDisplayValue(selectedCase.memberCode || formatMemberCode(selectedCase.memberId))}</li>
+              </ul>
+            </div>
+
+            <div>
+              <p className="info-label">Modus</p>
+              <p className="info-value">{toDisplayValue(selectedCase.modus)}</p>
+            </div>
+
+            <div>
+              <p className="info-label">Support</p>
+              <p className="info-value">{toDisplayValue(selectedCase.support)}</p>
+            </div>
+
+            <div>
+              <p className="info-label">Suspects</p>
+              {suspects.length > 0 ? (
+                <ul className="detail-list">
+                  {suspects.map((suspect) => (
+                    <li key={suspect}>{suspect}</li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="info-value">Not provided</p>
+              )}
+            </div>
+
+            <div>
+              <p className="info-label">Timeline and status updates</p>
+              {statusUpdates.length > 0 ? (
+                <ul className="timeline">
+                  {statusUpdates.map((update) => (
+                    <li key={update.caseStatusUpdateId}>
+                      <span>{formatDateTimeValue(update.updatedAtUtc)}</span>
+                      <p>
+                        <strong>{update.caseStatus}</strong>
+                        {update.updatedBy ? ` - by ${update.updatedBy}` : ''}
+                      </p>
+                      {update.statusNotes ? <p>{update.statusNotes}</p> : null}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="info-value">No status updates yet.</p>
+              )}
+            </div>
+          </div>
         ) : null}
-      </div>
+      </Modal>
 
       <Modal
         open={isModalOpen}
