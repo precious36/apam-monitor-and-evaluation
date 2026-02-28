@@ -59,11 +59,14 @@ const getAgeGroup = (age) => {
   return match ? match.label : 'Other'
 }
 
-const SKILL_CATEGORIES = [
+const OTHER_OPTION = 'Other'
+
+const BASE_SKILL_CATEGORIES = [
   'Technical/Vocational',
   'Professional/Academic',
   'Business and Entrepreneurship',
 ]
+const SKILL_CATEGORIES = [...BASE_SKILL_CATEGORIES, OTHER_OPTION]
 
 const SKILLS_BY_CATEGORY = {
   'Technical/Vocational': [
@@ -100,7 +103,8 @@ const SKILLS_BY_CATEGORY = {
   ],
 }
 
-const SKILL_LEVELS = ['Basic', 'Intermediate', 'Advanced', 'Professional']
+const BASE_SKILL_LEVELS = ['Basic', 'Intermediate', 'Advanced', 'Professional']
+const SKILL_LEVELS = [...BASE_SKILL_LEVELS, OTHER_OPTION]
 const EMPLOYMENT_STATUSES = ['Employed', 'Self-employed', 'Unemployed', 'Student']
 const EMPLOYER_SECTORS = ['Government', 'NGO', 'Private', 'Informal']
 const MONTHLY_INCOME_RANGES = ['Below MK50,000', 'MK50,000-MK150,000', 'MK150,000-MK300,00','MK300,000-MK500,000','MK500,000-MK1,000,000','Above MK1,000,000']
@@ -142,8 +146,10 @@ const createEmptyParentContact = () => ({
 
 const createEmptySkill = () => ({
   skillCategory: '',
+  skillCategoryOther: '',
   skillName: '',
   skillLevel: '',
+  skillLevelOther: '',
   isCertified: '',
   yearsOfExperience: '',
 })
@@ -162,6 +168,7 @@ const createEmptyForm = () => ({
   phoneNumber: '',
   alternativeContact: '',
   district: '',
+  districtOfOrigin: '',
   traditionalAuthority: '',
   villageArea: '',
   isRegisteredApamMember: '',
@@ -316,6 +323,22 @@ const getApiErrorMessage = (payload, status, fallbackMessage) => {
   }
 
   return fallbackMessage
+}
+
+const isKnownSkillCategory = (value) =>
+  typeof value === 'string' && BASE_SKILL_CATEGORIES.includes(value)
+
+const isKnownSkillLevel = (value) =>
+  typeof value === 'string' && BASE_SKILL_LEVELS.includes(value)
+
+const resolveSkillEntryValue = (selectedValue, otherValue) => {
+  if (selectedValue === OTHER_OPTION) {
+    const customValue = String(otherValue ?? '').trim()
+    return customValue || null
+  }
+
+  const normalized = String(selectedValue ?? '').trim()
+  return normalized || null
 }
 
 const toDisplayValue = (value) => {
@@ -872,7 +895,15 @@ export default function Members({ session }) {
       )
 
       if (field === 'skillCategory') {
-        skills[index] = { ...skills[index], skillName: '' }
+        skills[index] = {
+          ...skills[index],
+          skillName: '',
+          skillCategoryOther: value === OTHER_OPTION ? skills[index].skillCategoryOther : '',
+        }
+      }
+
+      if (field === 'skillLevel' && value !== OTHER_OPTION) {
+        skills[index] = { ...skills[index], skillLevelOther: '' }
       }
 
       return { ...prev, skills }
@@ -989,14 +1020,23 @@ export default function Members({ session }) {
 
     const skills =
       member.skills?.length > 0
-        ? member.skills.map((skill) => ({
-            skillCategory: skill.skillCategory ?? '',
-            skillName: skill.skillName ?? '',
-            skillLevel: skill.skillLevel ?? '',
-            isCertified: skill.isCertified ?? '',
-            yearsOfExperience:
-              typeof skill.yearsOfExperience === 'number' ? String(skill.yearsOfExperience) : '',
-          }))
+        ? member.skills.map((skill) => {
+            const incomingCategory = skill.skillCategory ?? ''
+            const incomingLevel = skill.skillLevel ?? ''
+            const categoryIsKnown = isKnownSkillCategory(incomingCategory)
+            const levelIsKnown = isKnownSkillLevel(incomingLevel)
+
+            return {
+              skillCategory: categoryIsKnown ? incomingCategory : incomingCategory ? OTHER_OPTION : '',
+              skillCategoryOther: categoryIsKnown ? '' : incomingCategory,
+              skillName: skill.skillName ?? '',
+              skillLevel: levelIsKnown ? incomingLevel : incomingLevel ? OTHER_OPTION : '',
+              skillLevelOther: levelIsKnown ? '' : incomingLevel,
+              isCertified: skill.isCertified ?? '',
+              yearsOfExperience:
+                typeof skill.yearsOfExperience === 'number' ? String(skill.yearsOfExperience) : '',
+            }
+          })
         : [createEmptySkill()]
 
     const programInterests = createDefaultProgramInterests().map((defaultEntry) => {
@@ -1024,6 +1064,7 @@ export default function Members({ session }) {
       phoneNumber: member.phoneNumber ?? '',
       alternativeContact: member.alternativeContact ?? '',
       district: member.district ?? '',
+      districtOfOrigin: member.districtOfOrigin ?? '',
       traditionalAuthority: member.traditionalAuthority ?? '',
       villageArea: member.villageArea ?? '',
       isRegisteredApamMember: member.isRegisteredApamMember ?? '',
@@ -1111,6 +1152,20 @@ export default function Members({ session }) {
     setSaveError('')
 
     try {
+      const hasMissingSkillCategoryOther = formValues.skills.some(
+        (skill) => skill.skillCategory === OTHER_OPTION && !String(skill.skillCategoryOther ?? '').trim(),
+      )
+      if (hasMissingSkillCategoryOther) {
+        throw new Error('Please specify the skill category for entries marked as Other.')
+      }
+
+      const hasMissingSkillLevelOther = formValues.skills.some(
+        (skill) => skill.skillLevel === OTHER_OPTION && !String(skill.skillLevelOther ?? '').trim(),
+      )
+      if (hasMissingSkillLevelOther) {
+        throw new Error('Please specify the skill level for entries marked as Other.')
+      }
+
       const hasKnownAge = typeof memberAge === 'number'
       const parentContacts = isMinor
         ? formValues.parentContacts
@@ -1136,10 +1191,13 @@ export default function Members({ session }) {
       const skills = formValues.skills
         .map((skill) => {
           const yearsOfExperience = Number.parseInt(skill.yearsOfExperience, 10)
+          const skillCategory = resolveSkillEntryValue(skill.skillCategory, skill.skillCategoryOther)
+          const skillLevel = resolveSkillEntryValue(skill.skillLevel, skill.skillLevelOther)
+
           return {
-            skillCategory: skill.skillCategory || null,
+            skillCategory,
             skillName: skill.skillName.trim() || null,
-            skillLevel: skill.skillLevel || null,
+            skillLevel,
             isCertified: skill.isCertified || null,
             yearsOfExperience: Number.isNaN(yearsOfExperience) ? null : Math.max(yearsOfExperience, 0),
           }
@@ -1167,6 +1225,7 @@ export default function Members({ session }) {
         phoneNumber: formValues.phoneNumber.trim() || null,
         alternativeContact: formValues.alternativeContact.trim() || null,
         district: formValues.district.trim(),
+        districtOfOrigin: formValues.districtOfOrigin.trim() || null,
         traditionalAuthority: formValues.traditionalAuthority.trim() || null,
         villageArea: formValues.villageArea.trim() || null,
         isRegisteredApamMember: formValues.isRegisteredApamMember || null,
@@ -1352,6 +1411,17 @@ export default function Members({ session }) {
                 <option value="">Select district</option>
                 {MALAWI_DISTRICTS.map((district) => (
                   <option key={district} value={district}>
+                    {district}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="form-field">
+              <span>District of origin</span>
+              <select value={formValues.districtOfOrigin} onChange={updateField('districtOfOrigin')}>
+                <option value="">Select district</option>
+                {MALAWI_DISTRICTS.map((district) => (
+                  <option key={`origin-${district}`} value={district}>
                     {district}
                   </option>
                 ))}
@@ -1715,6 +1785,17 @@ export default function Members({ session }) {
                         ))}
                       </select>
                     </label>
+                    {skill.skillCategory === OTHER_OPTION ? (
+                      <label className="form-field">
+                        <span>Specify skill category</span>
+                        <input
+                          type="text"
+                          placeholder="Type skill category"
+                          value={skill.skillCategoryOther}
+                          onChange={updateSkillEntry(index, 'skillCategoryOther')}
+                        />
+                      </label>
+                    ) : null}
                     <label className="form-field">
                       <span>Skill name</span>
                       <input
@@ -1741,6 +1822,17 @@ export default function Members({ session }) {
                         ))}
                       </select>
                     </label>
+                    {skill.skillLevel === OTHER_OPTION ? (
+                      <label className="form-field">
+                        <span>Specify skill level</span>
+                        <input
+                          type="text"
+                          placeholder="Type skill level"
+                          value={skill.skillLevelOther}
+                          onChange={updateSkillEntry(index, 'skillLevelOther')}
+                        />
+                      </label>
+                    ) : null}
                     <label className="form-field">
                       <span>Certified in this skill?</span>
                       <select value={skill.isCertified} onChange={updateSkillEntry(index, 'isCertified')}>
@@ -2262,6 +2354,10 @@ export default function Members({ session }) {
             <div className="form-field">
               <span>Alternative contact</span>
               <strong>{toDisplayValue(profileMember.alternativeContact)}</strong>
+            </div>
+            <div className="form-field">
+              <span>District of origin</span>
+              <strong>{toDisplayValue(profileMember.districtOfOrigin)}</strong>
             </div>
             <div className="form-field">
               <span>Traditional authority</span>
