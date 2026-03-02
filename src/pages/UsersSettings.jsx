@@ -22,6 +22,7 @@ const createEmptyForm = () => ({
   userName: '',
   password: '',
   phoneNumber: '',
+  location: '',
   emailConfirmed: false,
   twoFactorEnabled: false,
   lockoutEnabled: true,
@@ -306,6 +307,7 @@ export default function UsersSettings({ session }) {
       userName: user.userName ?? '',
       password: '',
       phoneNumber: user.phoneNumber ?? '',
+      location: user.location ?? '',
       emailConfirmed: Boolean(user.emailConfirmed),
       twoFactorEnabled: Boolean(user.twoFactorEnabled),
       lockoutEnabled: Boolean(user.lockoutEnabled),
@@ -393,6 +395,7 @@ export default function UsersSettings({ session }) {
             userName: formValues.userName.trim() || null,
             password: formValues.password,
             phoneNumber: formValues.phoneNumber.trim() || null,
+            location: formValues.location.trim() || null,
             emailConfirmed: formValues.emailConfirmed,
             roles: formValues.roles,
           }),
@@ -418,6 +421,7 @@ export default function UsersSettings({ session }) {
             email,
             userName: formValues.userName.trim() || null,
             phoneNumber: formValues.phoneNumber.trim() || null,
+            location: formValues.location.trim() || null,
             emailConfirmed: formValues.emailConfirmed,
             twoFactorEnabled: formValues.twoFactorEnabled,
             lockoutEnabled: formValues.lockoutEnabled,
@@ -718,7 +722,7 @@ export default function UsersSettings({ session }) {
         return true
       }
 
-      const searchableText = [user.userName, user.email, ...(user.roles ?? [])]
+      const searchableText = [user.userName, user.email, user.location, ...(user.roles ?? [])]
         .filter(Boolean)
         .join(' ')
         .toLowerCase()
@@ -735,6 +739,7 @@ export default function UsersSettings({ session }) {
           id: user.userId,
           userName: user.userName || 'Not set',
           email: user.email,
+          location: toDisplayValue(user.location),
           roles: (user.roles ?? []).join(', ') || 'Not assigned',
           status: locked ? 'Locked' : 'Active',
           lockoutEnd: formatDateTimeValue(user.lockoutEnd),
@@ -748,6 +753,7 @@ export default function UsersSettings({ session }) {
     () => [
       { key: 'userName', label: 'Username' },
       { key: 'email', label: 'Email' },
+      { key: 'location', label: 'Location' },
       { key: 'roles', label: 'Roles' },
       {
         key: 'status',
@@ -1152,6 +1158,16 @@ export default function UsersSettings({ session }) {
               value={formValues.phoneNumber}
               onChange={updateField('phoneNumber')}
               placeholder="Optional"
+              disabled={formMode === 'create' ? !canCreateUsers : !canUpdateUsers}
+            />
+          </label>
+          <label className="form-field">
+            <span>Location</span>
+            <input
+              type="text"
+              value={formValues.location}
+              onChange={updateField('location')}
+              placeholder="e.g. Lilongwe"
               disabled={formMode === 'create' ? !canCreateUsers : !canUpdateUsers}
             />
           </label>
