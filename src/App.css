@@ -1245,6 +1245,41 @@
   font-size: 0.88rem;
 }
 
+.table-pagination {
+  margin-top: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.table-pagination-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.table-pagination-button {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: 10px;
+  padding: 6px 12px;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.table-pagination-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.table-pagination-page {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
 .btn {
   border: none;
   border-radius: 12px;
