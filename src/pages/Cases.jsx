@@ -20,6 +20,34 @@ const CASE_STATUS_OPTIONS = [
   'Closed',
 ]
 
+const CASE_TYPE_OPTIONS = [
+  'Attempted abduction',
+  'Intimidation',
+  'Attempt to kidnap',
+  'Abduction',
+  'Exhumation of human corpse',
+  'Possession of human body parts',
+  'Conspiracy to commit a felony',
+  'Graveyard tampering',
+  'Attempted murder',
+  'Kidnapping',
+  'Theft of a child',
+  'Grevious harm',
+  'Injury to a person to cause harm',
+  'Offering a child for sale',
+  'Found selling human tissues',
+  'Missing person',
+  'Trespassing',
+  'Robbery with violence',
+  'Assault',
+  'Defilement',
+  'Child trafficking',
+  'Selling a child',
+  'Buglary',
+  'Insulting body with intent to sell human tissues',
+  'Unknown',
+]
+
 const MALAWI_DISTRICTS = [
   'Balaka',
   'Blantyre',
@@ -903,13 +931,18 @@ export default function Cases({ session }) {
 
           <label className="form-field">
             <span>Case type</span>
-            <input
-              type="text"
+            <select
               value={newCaseForm.caseType}
               onChange={updateNewCaseField('caseType')}
-              placeholder="e.g. Tampering the graveyard"
               required
-            />
+            >
+              <option value="">Select case type</option>
+              {CASE_TYPE_OPTIONS.map((caseTypeOption) => (
+                <option key={caseTypeOption} value={caseTypeOption}>
+                  {caseTypeOption}
+                </option>
+              ))}
+            </select>
           </label>
 
           <label className="form-field">
