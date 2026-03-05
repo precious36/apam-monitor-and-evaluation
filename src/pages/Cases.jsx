@@ -224,6 +224,8 @@ export default function Cases({ session }) {
     statusNotes: '',
   })
   const [newCaseForm, setNewCaseForm] = useState(() => createEmptyCaseForm())
+  const [memberSearchText, setMemberSearchText] = useState('')
+  const [isMemberDropdownOpen, setIsMemberDropdownOpen] = useState(false)
 
   const authHeader = useMemo(() => {
     const token = session?.accessToken
@@ -443,30 +445,45 @@ export default function Cases({ session }) {
   const suspects = useMemo(() => splitDetailList(selectedCase?.suspectDetails), [selectedCase?.suspectDetails])
   const statusUpdates = useMemo(() => selectedCase?.statusUpdates ?? [], [selectedCase?.statusUpdates])
 
+  const filteredMembers = useMemo(() => {
+    const token = memberSearchText.trim().toLowerCase()
+    if (!token) return members
+    return members.filter((m) => {
+      const code = m.memberCode || formatMemberCode(m.memberId)
+      return (
+        m.fullName?.toLowerCase().includes(token) ||
+        code.toLowerCase().includes(token)
+      )
+    })
+  }, [members, memberSearchText])
+
   const updateNewCaseField = (field) => (event) => {
     const { value } = event.target
     setNewCaseForm((prev) => ({ ...prev, [field]: value }))
   }
 
-  const handleVictimMemberChange = (event) => {
+  const handleMemberSearchInput = (event) => {
     const { value } = event.target
+    setMemberSearchText(value)
+    // Clear selected member id when user edits the text manually
+    setNewCaseForm((prev) => ({ ...prev, memberId: '' }))
+    setIsMemberDropdownOpen(true)
+  }
 
-    setNewCaseForm((prev) => {
-      if (!value) {
-        return { ...prev, memberId: '' }
-      }
+  const handleSelectMember = (member) => {
+    const code = member.memberCode || formatMemberCode(member.memberId)
+    setMemberSearchText(`${member.fullName} (${code})`)
+    setNewCaseForm((prev) => ({
+      ...prev,
+      memberId: String(member.memberId),
+      district: prev.district || member.district || '',
+    }))
+    setIsMemberDropdownOpen(false)
+  }
 
-      const selectedMember = members.find((member) => String(member.memberId) === value)
-      if (!selectedMember) {
-        return { ...prev, memberId: value }
-      }
-
-      return {
-        ...prev,
-        memberId: value,
-        district: prev.district || selectedMember.district || '',
-      }
-    })
+  const handleMemberInputBlur = () => {
+    // Delay so click on dropdown option fires before blur hides the list
+    setTimeout(() => setIsMemberDropdownOpen(false), 180)
   }
 
   const handleStatusFieldChange = (field) => (event) => {
@@ -495,6 +512,8 @@ export default function Cases({ session }) {
     setIsNewCaseOpen(false)
     setSaveError('')
     setNewCaseForm(createEmptyCaseForm())
+    setMemberSearchText('')
+    setIsMemberDropdownOpen(false)
   }
 
   const openNewCaseModal = () => {
@@ -509,9 +528,11 @@ export default function Cases({ session }) {
     const selectedVictimMember = members.find(
       (member) => String(member.memberId) === String(newCaseForm.memberId),
     )
+    // victimName is either the registered member's full name or the free-text entry
+    const victimDisplayName = selectedVictimMember?.fullName || memberSearchText.trim()
 
-    if (!selectedVictimMember) {
-      const errorMessage = 'Victim member is required.'
+    if (!victimDisplayName) {
+      const errorMessage = 'Please select a registered member or enter a victim / deceased name.'
       setSaveError(errorMessage)
       notify.error(errorMessage)
       return
@@ -543,7 +564,7 @@ export default function Cases({ session }) {
           location: newCaseForm.location || null,
           modus: newCaseForm.modus || null,
           support: newCaseForm.support || null,
-          victimOrDeceased: selectedVictimMember.fullName || null,
+          victimOrDeceased: victimDisplayName || null,
           suspectDetails: newCaseForm.suspectDetails || null,
           reporterName: newCaseForm.reporterName || null,
           policeOfficerName: newCaseForm.policeOfficerName || null,
@@ -889,20 +910,58 @@ export default function Cases({ session }) {
         <div className="form-grid">
           <label className="form-field">
             <span>Victim / deceased</span>
-            <select
-              value={newCaseForm.memberId}
-              onChange={handleVictimMemberChange}
-              disabled={isMembersLoading}
-              required
-            >
-              <option value="">Select victim member</option>
-              {isMembersLoading ? <option value="" disabled>Loading members...</option> : null}
-              {members.map((member) => (
-                <option key={member.memberId} value={member.memberId}>
-                  {member.fullName} ({member.memberCode || formatMemberCode(member.memberId)})
-                </option>
-              ))}
-            </select>
+            <div className="member-combobox">
+              <input
+                type="text"
+                className="member-combobox-input"
+                value={memberSearchText}
+                onChange={handleMemberSearchInput}
+                onFocus={() => setIsMemberDropdownOpen(true)}
+                onBlur={handleMemberInputBlur}
+                placeholder={isMembersLoading ? 'Loading members…' : 'Search registered member or type a name…'}
+                disabled={isMembersLoading}
+                autoComplete="off"
+              />
+              {newCaseForm.memberId ? (
+                <span className="member-combobox-badge">Registered member</span>
+              ) : memberSearchText.trim() ? (
+                <span className="member-combobox-badge member-combobox-badge--custom">Non-member</span>
+              ) : null}
+              {isMemberDropdownOpen && (
+                <div className="member-combobox-dropdown">
+                  {filteredMembers.length === 0 && !memberSearchText.trim() ? (
+                    <div className="member-combobox-empty">Start typing to search members…</div>
+                  ) : filteredMembers.length === 0 ? (
+                    <div className="member-combobox-empty">No registered members match "{memberSearchText}"</div>
+                  ) : (
+                    filteredMembers.map((member) => {
+                      const code = member.memberCode || formatMemberCode(member.memberId)
+                      return (
+                        <div
+                          key={member.memberId}
+                          className="member-combobox-option"
+                          onMouseDown={() => handleSelectMember(member)}
+                        >
+                          <span className="member-combobox-name">{member.fullName}</span>
+                          <span className="member-combobox-code">{code}</span>
+                        </div>
+                      )
+                    })
+                  )}
+                  {memberSearchText.trim() && (
+                    <div
+                      className="member-combobox-option member-combobox-option--custom"
+                      onMouseDown={() => {
+                        setNewCaseForm((prev) => ({ ...prev, memberId: '' }))
+                        setIsMemberDropdownOpen(false)
+                      }}
+                    >
+                      <span className="member-combobox-name">Use "{memberSearchText}" as non-member</span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
             {membersError ? (
               <Button variant="outline" size="sm" onClick={loadMembers} disabled={isMembersLoading}>
                 Retry loading members
