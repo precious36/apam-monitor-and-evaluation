@@ -5,6 +5,7 @@ import DataTable from '../components/DataTable'
 import Modal from '../components/Modal'
 import ProgressBar from '../components/ProgressBar'
 import { useNotify } from '../hooks/useNotify'
+import { hasPermission, PERMISSIONS } from '../lib/permissions'
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '')
 
@@ -325,6 +326,22 @@ const getApiErrorMessage = (payload, status, fallbackMessage) => {
   return fallbackMessage
 }
 
+const getLoginErrorMessage = (payload, status, fallbackMessage) => {
+  if (payload?.errors?.length) {
+    return payload.errors[0]
+  }
+
+  if (payload?.message) {
+    return payload.message
+  }
+
+  if (status === 401) {
+    return 'Incorrect password. Please try again.'
+  }
+
+  return fallbackMessage
+}
+
 const isKnownSkillCategory = (value) =>
   typeof value === 'string' && BASE_SKILL_CATEGORIES.includes(value)
 
@@ -486,6 +503,10 @@ export default function Members({ session }) {
   const [isSaving, setIsSaving] = useState(false)
   const [activeMember, setActiveMember] = useState(null)
   const [profileMember, setProfileMember] = useState(null)
+  const [pendingDeleteMemberId, setPendingDeleteMemberId] = useState(null)
+  const [deleteTargetMember, setDeleteTargetMember] = useState(null)
+  const [deletePassword, setDeletePassword] = useState('')
+  const [deleteError, setDeleteError] = useState('')
   const [formValues, setFormValues] = useState(() => createEmptyForm())
   const [activeFilterTypes, setActiveFilterTypes] = useState([])
   const [filterTypePickerValue, setFilterTypePickerValue] = useState('')
@@ -494,6 +515,15 @@ export default function Members({ session }) {
     const token = session?.accessToken
     return token ? { Authorization: `Bearer ${token}` } : {}
   }, [session?.accessToken])
+  const canCreateMembers = hasPermission(session, PERMISSIONS.MEMBERS_CREATE)
+  const canUpdateMembers = hasPermission(session, PERMISSIONS.MEMBERS_UPDATE)
+  const canDeleteMembers = hasPermission(session, PERMISSIONS.MEMBERS_DELETE)
+  const deleteAuthIdentifier = useMemo(() => {
+    const userName = String(session?.user?.userName ?? '').trim()
+    const email = String(session?.user?.email ?? '').trim()
+
+    return email || userName
+  }, [session?.user?.email, session?.user?.userName])
 
   const fetchMembers = async () => {
     setIsLoading(true)
@@ -685,30 +715,50 @@ export default function Members({ session }) {
     {
       key: 'actions',
       label: 'Actions',
-      render: (row) => (
-        <div className="table-actions">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={(event) => {
-              event.stopPropagation()
-              handleViewMember(row.source)
-            }}
-          >
-            View profile
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={(event) => {
-              event.stopPropagation()
-              handleEditMember(row.source)
-            }}
-          >
-            Edit
-          </Button>
-        </div>
-      ),
+      render: (row) => {
+        const isDeleteBusy = pendingDeleteMemberId === row.source.memberId
+
+        return (
+          <div className="table-actions">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={(event) => {
+                event.stopPropagation()
+                handleViewMember(row.source)
+              }}
+            >
+              View profile
+            </Button>
+            {canUpdateMembers ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={(event) => {
+                  event.stopPropagation()
+                  handleEditMember(row.source)
+                }}
+                disabled={isDeleteBusy || isSaving}
+              >
+                Edit
+              </Button>
+            ) : null}
+            {canDeleteMembers ? (
+              <Button
+                variant="danger"
+                size="sm"
+                onClick={(event) => {
+                  event.stopPropagation()
+                  openDeleteMemberModal(row.source)
+                }}
+                disabled={isDeleteBusy || isSaving}
+              >
+                {isDeleteBusy ? 'Deleting...' : 'Delete'}
+              </Button>
+            ) : null}
+          </div>
+        )
+      },
     },
   ]
 
@@ -998,7 +1048,114 @@ export default function Members({ session }) {
     handleEditMember(selectedMember)
   }
 
+  const closeDeleteMemberModal = () => {
+    if (pendingDeleteMemberId) {
+      return
+    }
+
+    setDeleteTargetMember(null)
+    setDeletePassword('')
+    setDeleteError('')
+  }
+
+  const openDeleteMemberModal = (member) => {
+    if (!canDeleteMembers) {
+      notify.error('You do not have permission to delete members.')
+      return
+    }
+
+    const memberId = member?.memberId
+    if (!memberId) {
+      return
+    }
+
+    setDeleteTargetMember(member)
+    setDeletePassword('')
+    setDeleteError('')
+  }
+
+  const handleDeleteMember = async () => {
+    if (!deleteTargetMember?.memberId) {
+      return
+    }
+
+    if (!deletePassword.trim()) {
+      setDeleteError('Enter your password to confirm deletion.')
+      return
+    }
+
+    if (!deleteAuthIdentifier) {
+      setDeleteError('Unable to verify your account. Please sign in again.')
+      return
+    }
+
+    const memberId = deleteTargetMember.memberId
+
+    setPendingDeleteMemberId(memberId)
+    setDeleteError('')
+
+    try {
+      const verifyResponse = await fetch(`${API_BASE_URL}/api/auth/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          emailOrUserName: deleteAuthIdentifier,
+          password: deletePassword,
+        }),
+      })
+
+      const verifyPayload = await verifyResponse.json().catch(() => null)
+      if (!verifyResponse.ok || !verifyPayload?.succeeded || !verifyPayload?.data?.accessToken) {
+        throw new Error(
+          getLoginErrorMessage(
+            verifyPayload,
+            verifyResponse.status,
+            'Unable to verify your password.',
+          ),
+        )
+      }
+
+      const response = await fetch(`${API_BASE_URL}/api/members/${memberId}`, {
+        method: 'DELETE',
+        headers: authHeader,
+      })
+
+      if (response.status !== 204) {
+        const payload = await response.json().catch(() => null)
+        throw new Error(getApiErrorMessage(payload, response.status, 'Failed to delete member.'))
+      }
+
+      if (profileMember?.memberId === memberId) {
+        closeProfileModal()
+      }
+
+      if (activeMember?.memberId === memberId) {
+        setIsModalOpen(false)
+        setActiveMember(null)
+        setFormValues(createEmptyForm())
+        setStepIndex(0)
+      }
+
+      closeDeleteMemberModal()
+      await fetchMembers()
+      notify.success('Member deleted successfully.')
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to delete member.'
+      setDeleteError(errorMessage)
+      notify.error(errorMessage)
+    } finally {
+      setPendingDeleteMemberId(null)
+    }
+  }
+
   const handleAddMember = () => {
+    if (!canCreateMembers) {
+      notify.error('You do not have permission to create members.')
+      return
+    }
+
     setActiveMember(null)
     setFormValues(createEmptyForm())
     setSaveError('')
@@ -1007,6 +1164,11 @@ export default function Members({ session }) {
   }
 
   function handleEditMember(member) {
+    if (!canUpdateMembers) {
+      notify.error('You do not have permission to edit members.')
+      return
+    }
+
     const parentContacts =
       member.parentContacts?.length > 0
         ? member.parentContacts.map((parent) => ({
@@ -1148,6 +1310,16 @@ export default function Members({ session }) {
   }
 
   const handleSaveMember = async () => {
+    if (activeMember && !canUpdateMembers) {
+      notify.error('You do not have permission to edit members.')
+      return
+    }
+
+    if (!activeMember && !canCreateMembers) {
+      notify.error('You do not have permission to create members.')
+      return
+    }
+
     setIsSaving(true)
     setSaveError('')
 
@@ -2176,7 +2348,7 @@ export default function Members({ session }) {
             Export
           </Button>
           <Button variant="outline">Import CSV</Button>
-          <Button onClick={handleAddMember}>Add member</Button>
+          {canCreateMembers ? <Button onClick={handleAddMember}>Add member</Button> : null}
         </div>
       </div>
 
@@ -2327,9 +2499,20 @@ export default function Members({ session }) {
             <Button variant="ghost" onClick={closeProfileModal}>
               Close
             </Button>
-            <Button variant="outline" onClick={handleEditFromProfile}>
-              Edit profile
-            </Button>
+            {canUpdateMembers ? (
+              <Button variant="outline" onClick={handleEditFromProfile}>
+                Edit profile
+              </Button>
+            ) : null}
+            {canDeleteMembers && profileMember ? (
+              <Button
+                variant="danger"
+                onClick={() => openDeleteMemberModal(profileMember)}
+                disabled={pendingDeleteMemberId === profileMember.memberId || isSaving}
+              >
+                {pendingDeleteMemberId === profileMember.memberId ? 'Deleting...' : 'Delete member'}
+              </Button>
+            ) : null}
           </div>
         }
       >
@@ -2504,6 +2687,56 @@ export default function Members({ session }) {
             </div>
           </div>
         ) : null}
+      </Modal>
+
+      <Modal
+        open={Boolean(deleteTargetMember)}
+        title="Delete member"
+        subtitle="Are you sure you want to delete this member?"
+        onClose={closeDeleteMemberModal}
+        footer={
+          <div className="modal-actions modal-actions-split">
+            <Button
+              variant="ghost"
+              onClick={closeDeleteMemberModal}
+              disabled={Boolean(pendingDeleteMemberId)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              onClick={handleDeleteMember}
+              disabled={
+                Boolean(pendingDeleteMemberId) ||
+                !deleteTargetMember?.memberId
+              }
+            >
+              {pendingDeleteMemberId ? 'Deleting...' : 'Confirm and delete'}
+            </Button>
+          </div>
+        }
+      >
+        {deleteError ? <p className="alert">{deleteError}</p> : null}
+        <div className="form-grid">
+          <p className="table-meta">
+            You are deleting <strong>{deleteTargetMember?.fullName ?? 'this member'}</strong>. This action cannot be undone.
+          </p>
+          <label className="form-field form-field-full">
+            <span>Admin password</span>
+            <input
+              type="password"
+              autoComplete="current-password"
+              value={deletePassword}
+              onChange={(event) => {
+                setDeletePassword(event.target.value)
+                if (deleteError) {
+                  setDeleteError('')
+                }
+              }}
+              placeholder="Enter your password to confirm deletion"
+            />
+          </label>
+        </div>
       </Modal>
     </div>
   )
