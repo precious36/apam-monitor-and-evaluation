@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Card from '../components/Card'
 import Button from '../components/Button'
 import DataTable from '../components/DataTable'
@@ -489,6 +489,7 @@ const triggerDownload = (content, mimeType, filename) => {
 
 export default function Members({ session }) {
   const notify = useNotify()
+  const stepFormRef = useRef(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isExportModalOpen, setIsExportModalOpen] = useState(false)
   const [exportFormat, setExportFormat] = useState('csv')
@@ -1516,6 +1517,21 @@ export default function Members({ session }) {
     formValues.district.trim().length > 0 &&
     hasParentInfoForMinor
 
+  const handleNextStep = () => {
+    if (stepFormRef.current && !stepFormRef.current.reportValidity()) {
+      setSaveError('Please complete the required fields in this section before continuing.')
+      return
+    }
+
+    if (!hasParentInfoForMinor) {
+      setSaveError('Add at least one parent/guardian full name for members under 18.')
+      return
+    }
+
+    setSaveError('')
+    setStepIndex((prev) => Math.min(prev + 1, steps.length - 1))
+  }
+
   const stepContent = () => {
     switch (stepIndex) {
       case 0:
@@ -1528,11 +1544,12 @@ export default function Members({ session }) {
                 placeholder="Enter full name"
                 value={formValues.fullName}
                 onChange={updateField('fullName')}
+                required
               />
             </label>
             <label className="form-field">
               <span>Sex</span>
-              <select value={formValues.gender} onChange={updateField('gender')}>
+              <select value={formValues.gender} onChange={updateField('gender')} required>
                 <option value="">Select sex</option>
                 <option>Female</option>
                 <option>Male</option>
@@ -1579,7 +1596,7 @@ export default function Members({ session }) {
             </label>
             <label className="form-field">
               <span>District of residence</span>
-              <select value={formValues.district} onChange={updateField('district')}>
+              <select value={formValues.district} onChange={updateField('district')} required>
                 <option value="">Select district</option>
                 {MALAWI_DISTRICTS.map((district) => (
                   <option key={district} value={district}>
@@ -1619,7 +1636,11 @@ export default function Members({ session }) {
             </label>
             <label className="form-field">
               <span>Are you a registered APAM member?</span>
-              <select value={formValues.isRegisteredApamMember} onChange={updateField('isRegisteredApamMember')}>
+              <select
+                value={formValues.isRegisteredApamMember}
+                onChange={updateField('isRegisteredApamMember')}
+                required
+              >
                 <option value="">Select response</option>
                 <option>Yes</option>
                 <option>No</option>
@@ -1627,7 +1648,7 @@ export default function Members({ session }) {
             </label>
             <label className="form-field">
               <span>Marital status</span>
-              <select value={formValues.maritalStatus} onChange={updateField('maritalStatus')}>
+              <select value={formValues.maritalStatus} onChange={updateField('maritalStatus')} required>
                 <option value="">Select status</option>
                 <option>Single</option>
                 <option>Married</option>
@@ -1642,6 +1663,7 @@ export default function Members({ session }) {
                 <select
                   value={formValues.isMarriedToFellowMember}
                   onChange={updateField('isMarriedToFellowMember')}
+                  required
                 >
                   <option value="">Select response</option>
                   <option>Yes</option>
@@ -1667,6 +1689,7 @@ export default function Members({ session }) {
                     placeholder="Enter spouse full name"
                     value={formValues.spouseFullName}
                     onChange={updateField('spouseFullName')}
+                    required
                   />
                 </label>
                 <label className="form-field">
@@ -1792,6 +1815,7 @@ export default function Members({ session }) {
                             placeholder="Example: BEN-00021"
                             value={parent.parentMemberCode}
                             onChange={updateParentContact(index, 'parentMemberCode')}
+                            required
                           />
                         </label>
                       ) : null}
@@ -1820,6 +1844,7 @@ export default function Members({ session }) {
               <select
                 value={formValues.hasAdditionalDisability}
                 onChange={updateField('hasAdditionalDisability')}
+                required
               >
                 <option value="">Select response</option>
                 <option>Yes</option>
@@ -1834,12 +1859,17 @@ export default function Members({ session }) {
                   placeholder="Enter disability details"
                   value={formValues.additionalDisabilityDetails}
                   onChange={updateField('additionalDisabilityDetails')}
+                  required
                 />
               </label>
             ) : null}
             <label className="form-field">
               <span>Do you use any assistive devices?</span>
-              <select value={formValues.assistiveDeviceUsage} onChange={updateField('assistiveDeviceUsage')}>
+              <select
+                value={formValues.assistiveDeviceUsage}
+                onChange={updateField('assistiveDeviceUsage')}
+                required
+              >
                 <option value="">Select response</option>
                 <option>None</option>
                 <option>Glasses</option>
@@ -1853,6 +1883,7 @@ export default function Members({ session }) {
               <select
                 value={formValues.discriminationInEducationOrEmployment}
                 onChange={updateField('discriminationInEducationOrEmployment')}
+                required
               >
                 <option value="">Select response</option>
                 <option>Often</option>
@@ -1862,7 +1893,7 @@ export default function Members({ session }) {
             </label>
             <label className="form-field">
               <span>Diagnosed with skin cancer by a health professional?</span>
-              <select value={formValues.skinCancerDiagnosis} onChange={updateField('skinCancerDiagnosis')}>
+              <select value={formValues.skinCancerDiagnosis} onChange={updateField('skinCancerDiagnosis')} required>
                 <option value="">Select response</option>
                 <option>Yes</option>
                 <option>No</option>
@@ -1873,7 +1904,11 @@ export default function Members({ session }) {
               <>
                 <label className="form-field">
                   <span>If yes, type of skin cancer (if known)</span>
-                  <select value={formValues.skinCancerType} onChange={updateField('skinCancerType')}>
+                  <select
+                    value={formValues.skinCancerType}
+                    onChange={updateField('skinCancerType')}
+                    required
+                  >
                     <option value="">Select type</option>
                     <option>Squamous cell</option>
                     <option>Carcinoma</option>
@@ -1884,7 +1919,11 @@ export default function Members({ session }) {
                 </label>
                 <label className="form-field">
                   <span>Level/stage of skin cancer (if known)</span>
-                  <select value={formValues.skinCancerStage} onChange={updateField('skinCancerStage')}>
+                  <select
+                    value={formValues.skinCancerStage}
+                    onChange={updateField('skinCancerStage')}
+                    required
+                  >
                     <option value="">Select stage</option>
                     <option>Early stage</option>
                     <option>Moderate</option>
@@ -1898,6 +1937,7 @@ export default function Members({ session }) {
                   <select
                     value={formValues.currentlyReceivingTreatment}
                     onChange={updateField('currentlyReceivingTreatment')}
+                    required
                   >
                     <option value="">Select response</option>
                     <option>Yes</option>
@@ -1912,6 +1952,7 @@ export default function Members({ session }) {
                       placeholder="Hospital or clinic name"
                       value={formValues.treatmentLocation}
                       onChange={updateField('treatmentLocation')}
+                      required
                     />
                   </label>
                 ) : null}
@@ -1920,6 +1961,7 @@ export default function Members({ session }) {
                   <select
                     value={formValues.needsSupportAccessingTreatment}
                     onChange={updateField('needsSupportAccessingTreatment')}
+                    required
                   >
                     <option value="">Select response</option>
                     <option>Yes</option>
@@ -1965,6 +2007,7 @@ export default function Members({ session }) {
                           placeholder="Type skill category"
                           value={skill.skillCategoryOther}
                           onChange={updateSkillEntry(index, 'skillCategoryOther')}
+                          required
                         />
                       </label>
                     ) : null}
@@ -2002,6 +2045,7 @@ export default function Members({ session }) {
                           placeholder="Type skill level"
                           value={skill.skillLevelOther}
                           onChange={updateSkillEntry(index, 'skillLevelOther')}
+                          required
                         />
                       </label>
                     ) : null}
@@ -2039,7 +2083,11 @@ export default function Members({ session }) {
             </div>
             <label className="form-field">
               <span>Do you currently run a business?</span>
-              <select value={formValues.currentlyRunsBusiness} onChange={updateField('currentlyRunsBusiness')}>
+              <select
+                value={formValues.currentlyRunsBusiness}
+                onChange={updateField('currentlyRunsBusiness')}
+                required
+              >
                 <option value="">Select response</option>
                 <option>Yes</option>
                 <option>No</option>
@@ -2054,6 +2102,7 @@ export default function Members({ session }) {
                     placeholder="Enter business type"
                     value={formValues.typeOfBusiness}
                     onChange={updateField('typeOfBusiness')}
+                    required
                   />
                 </label>
                 <label className="form-field">
@@ -2088,6 +2137,7 @@ export default function Members({ session }) {
               <select
                 value={formValues.currentEmploymentStatus}
                 onChange={updateField('currentEmploymentStatus')}
+                required
               >
                 <option value="">Select status</option>
                 {EMPLOYMENT_STATUSES.map((status) => (
@@ -2106,11 +2156,12 @@ export default function Members({ session }) {
                     placeholder="Enter job title"
                     value={formValues.jobTitle}
                     onChange={updateField('jobTitle')}
+                    required
                   />
                 </label>
                 <label className="form-field">
                   <span>Employer/sector</span>
-                  <select value={formValues.employerSector} onChange={updateField('employerSector')}>
+                  <select value={formValues.employerSector} onChange={updateField('employerSector')} required>
                     <option value="">Select sector</option>
                     {EMPLOYER_SECTORS.map((sector) => (
                       <option key={sector} value={sector}>
@@ -2124,6 +2175,7 @@ export default function Members({ session }) {
                   <select
                     value={formValues.monthlyIncomeRange}
                     onChange={updateField('monthlyIncomeRange')}
+                    required
                   >
                     <option value="">Select range</option>
                     {MONTHLY_INCOME_RANGES.map((range) => (
@@ -2138,7 +2190,11 @@ export default function Members({ session }) {
             {isUnemployed ? (
               <label className="form-field">
                 <span>Actively seeking work?</span>
-                <select value={formValues.activelySeekingWork} onChange={updateField('activelySeekingWork')}>
+                <select
+                  value={formValues.activelySeekingWork}
+                  onChange={updateField('activelySeekingWork')}
+                  required
+                >
                   <option value="">Select response</option>
                   <option>Yes</option>
                   <option>No</option>
@@ -2231,7 +2287,7 @@ export default function Members({ session }) {
           <div className="form-grid">
             <label className="form-field">
               <span>Do you have land for farming?</span>
-              <select value={formValues.hasLandForFarming} onChange={updateField('hasLandForFarming')}>
+              <select value={formValues.hasLandForFarming} onChange={updateField('hasLandForFarming')} required>
                 <option value="">Select response</option>
                 <option>Yes</option>
                 <option>No</option>
@@ -2239,7 +2295,7 @@ export default function Members({ session }) {
             </label>
             <label className="form-field">
               <span>Do you have access to startup capital?</span>
-              <select value={formValues.hasStartupCapital} onChange={updateField('hasStartupCapital')}>
+              <select value={formValues.hasStartupCapital} onChange={updateField('hasStartupCapital')} required>
                 <option value="">Select response</option>
                 <option>Yes</option>
                 <option>No</option>
@@ -2250,6 +2306,7 @@ export default function Members({ session }) {
               <select
                 value={formValues.receivedBusinessGrantOrLoan}
                 onChange={updateField('receivedBusinessGrantOrLoan')}
+                required
               >
                 <option value="">Select response</option>
                 <option>Yes</option>
@@ -2261,6 +2318,7 @@ export default function Members({ session }) {
               <select
                 value={formValues.partOfSavingsOrCooperative}
                 onChange={updateField('partOfSavingsOrCooperative')}
+                required
               >
                 <option value="">Select response</option>
                 <option>Yes</option>
@@ -2272,6 +2330,7 @@ export default function Members({ session }) {
               <select
                 value={formValues.beneficiaryOfGovernmentOrOtherSocialSchemes}
                 onChange={updateField('beneficiaryOfGovernmentOrOtherSocialSchemes')}
+                required
               >
                 <option value="">Select response</option>
                 <option>Yes</option>
@@ -2286,7 +2345,7 @@ export default function Members({ session }) {
             {formValues.programInterests.map((entry) => (
               <label className="form-field" key={entry.programArea}>
                 <span>{entry.programArea}</span>
-                <select value={entry.interested} onChange={updateProgramInterest(entry.programArea)}>
+                <select value={entry.interested} onChange={updateProgramInterest(entry.programArea)} required>
                   <option value="">Select response</option>
                   <option>Yes</option>
                   <option>No</option>
@@ -2300,7 +2359,7 @@ export default function Members({ session }) {
           <div className="form-grid">
             <label className="form-field">
               <span>Consent provided</span>
-              <select value={formValues.consentStatus} onChange={updateField('consentStatus')}>
+              <select value={formValues.consentStatus} onChange={updateField('consentStatus')} required>
                 <option value="">Select status</option>
                 <option>Yes, signed</option>
                 <option>Pending</option>
@@ -2312,6 +2371,7 @@ export default function Members({ session }) {
               <select
                 value={formValues.dataSharingConsent}
                 onChange={updateField('dataSharingConsent')}
+                required
               >
                 <option value="">Select status</option>
                 <option>Approved</option>
@@ -2469,13 +2529,16 @@ export default function Members({ session }) {
           <div className="modal-actions">
             <Button
               variant="ghost"
-              onClick={() => setStepIndex((prev) => Math.max(prev - 1, 0))}
+              onClick={() => {
+                setSaveError('')
+                setStepIndex((prev) => Math.max(prev - 1, 0))
+              }}
               disabled={stepIndex === 0}
             >
               Back
             </Button>
             {stepIndex < steps.length - 1 ? (
-              <Button onClick={() => setStepIndex((prev) => prev + 1)}>Next</Button>
+              <Button onClick={handleNextStep}>Next</Button>
             ) : (
               <Button onClick={handleSaveMember} disabled={!canSave || isSaving}>
                 {isSaving ? 'Saving...' : activeMember ? 'Update member' : 'Save member'}
@@ -2486,7 +2549,14 @@ export default function Members({ session }) {
       >
         <ProgressBar steps={steps} current={stepIndex} />
         {saveError ? <p className="alert">{saveError}</p> : null}
-        {stepContent()}
+        <form
+          ref={stepFormRef}
+          onSubmit={(event) => {
+            event.preventDefault()
+          }}
+        >
+          {stepContent()}
+        </form>
       </Modal>
 
       <Modal
