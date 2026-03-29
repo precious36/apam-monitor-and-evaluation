@@ -918,6 +918,20 @@ export default function Members({ session }) {
         next.numberOfEmployees = ''
       }
 
+      if (field === 'dateOfBirth') {
+        const nextAge = calculateAge(value)
+        const isMemberMinor = typeof nextAge === 'number' && nextAge < 18
+
+        if (isMemberMinor) {
+          next.currentEmploymentStatus = 'Student'
+          next.employmentStatus = 'Student'
+          next.jobTitle = ''
+          next.employerSector = ''
+          next.monthlyIncomeRange = ''
+          next.activelySeekingWork = ''
+        }
+      }
+
       if (field === 'currentEmploymentStatus') {
         next.employmentStatus = value
 
@@ -1224,12 +1238,18 @@ export default function Members({ session }) {
     const businessProfile = member.businessProfile ?? {}
     const trainingProfile = member.trainingProfile ?? {}
     const economicOpportunityProfile = member.economicOpportunityProfile ?? {}
+    const normalizedDateOfBirth = formatDateForInput(member.dateOfBirth)
+    const loadedMemberAge = calculateAge(normalizedDateOfBirth)
+    const isLoadedMemberMinor = typeof loadedMemberAge === 'number' && loadedMemberAge < 18
+    const loadedEmploymentStatus = isLoadedMemberMinor
+      ? 'Student'
+      : employmentProfile.currentEmploymentStatus ?? member.employmentStatus ?? ''
 
     setActiveMember(member)
     setFormValues({
       fullName: member.fullName ?? '',
       gender: member.gender ?? '',
-      dateOfBirth: formatDateForInput(member.dateOfBirth),
+      dateOfBirth: normalizedDateOfBirth,
       nationalId: member.nationalId ?? '',
       phoneNumber: member.phoneNumber ?? '',
       alternativeContact: member.alternativeContact ?? '',
@@ -1272,14 +1292,12 @@ export default function Members({ session }) {
         typeof businessProfile.numberOfEmployees === 'number'
           ? String(businessProfile.numberOfEmployees)
           : '',
-      currentEmploymentStatus:
-        employmentProfile.currentEmploymentStatus ?? member.employmentStatus ?? '',
-      jobTitle: employmentProfile.jobTitle ?? '',
-      employerSector: employmentProfile.employerSector ?? '',
-      monthlyIncomeRange: employmentProfile.monthlyIncomeRange ?? '',
-      activelySeekingWork: employmentProfile.activelySeekingWork ?? '',
-      employmentStatus:
-        employmentProfile.currentEmploymentStatus ?? member.employmentStatus ?? '',
+      currentEmploymentStatus: loadedEmploymentStatus,
+      jobTitle: isLoadedMemberMinor ? '' : employmentProfile.jobTitle ?? '',
+      employerSector: isLoadedMemberMinor ? '' : employmentProfile.employerSector ?? '',
+      monthlyIncomeRange: isLoadedMemberMinor ? '' : employmentProfile.monthlyIncomeRange ?? '',
+      activelySeekingWork: isLoadedMemberMinor ? '' : employmentProfile.activelySeekingWork ?? '',
+      employmentStatus: loadedEmploymentStatus,
       healthConditions: member.healthConditions ?? '',
       disabilityStatus: member.disabilityStatus ?? '',
       assistiveDevices: member.assistiveDevices ?? '',
@@ -1396,6 +1414,9 @@ export default function Members({ session }) {
           interested: entry.interested || null,
         }))
         .filter((entry) => entry.interested)
+      const normalizedEmploymentStatus = isMinor
+        ? 'Student'
+        : formValues.currentEmploymentStatus || formValues.employmentStatus || null
 
       const payload = {
         fullName: formValues.fullName.trim(),
@@ -1428,7 +1449,7 @@ export default function Members({ session }) {
           : Math.max(numberOfChildrenInSecondarySchool, 0),
         parentContacts,
         educationLevel: formValues.educationLevel || null,
-        employmentStatus: formValues.currentEmploymentStatus || formValues.employmentStatus || null,
+        employmentStatus: normalizedEmploymentStatus,
         healthConditions: formValues.healthConditions || null,
         disabilityStatus: formValues.disabilityStatus || null,
         assistiveDevices: formValues.assistiveDevices || null,
@@ -1452,11 +1473,11 @@ export default function Members({ session }) {
         notes: formValues.notes || null,
         skills,
         employmentProfile: {
-          currentEmploymentStatus: formValues.currentEmploymentStatus || null,
-          jobTitle: formValues.jobTitle.trim() || null,
-          employerSector: formValues.employerSector || null,
-          monthlyIncomeRange: formValues.monthlyIncomeRange || null,
-          activelySeekingWork: formValues.activelySeekingWork || null,
+          currentEmploymentStatus: normalizedEmploymentStatus,
+          jobTitle: isMinor ? null : formValues.jobTitle.trim() || null,
+          employerSector: isMinor ? null : formValues.employerSector || null,
+          monthlyIncomeRange: isMinor ? null : formValues.monthlyIncomeRange || null,
+          activelySeekingWork: isMinor ? null : formValues.activelySeekingWork || null,
         },
         businessProfile: {
           currentlyRunsBusiness: formValues.currentlyRunsBusiness || null,
@@ -2139,75 +2160,84 @@ export default function Members({ session }) {
       case 3:
         return (
           <div className="form-grid">
-            <label className="form-field">
-              <span>Current employment status</span>
-              <select
-                value={formValues.currentEmploymentStatus}
-                onChange={updateField('currentEmploymentStatus')}
-                required
-              >
-                <option value="">Select status</option>
-                {EMPLOYMENT_STATUSES.map((status) => (
-                  <option key={status} value={status}>
-                    {status}
-                  </option>
-                ))}
-              </select>
-            </label>
-            {isEmployedOrSelfEmployed ? (
+            {isMinor ? (
+              <label className="form-field">
+                <span>Current employment status</span>
+                <input type="text" value="Student" disabled />
+              </label>
+            ) : (
               <>
                 <label className="form-field">
-                  <span>Job title</span>
-                  <input
-                    type="text"
-                    placeholder="Enter job title"
-                    value={formValues.jobTitle}
-                    onChange={updateField('jobTitle')}
-                    required
-                  />
-                </label>
-                <label className="form-field">
-                  <span>Employer/sector</span>
-                  <select value={formValues.employerSector} onChange={updateField('employerSector')} required>
-                    <option value="">Select sector</option>
-                    {EMPLOYER_SECTORS.map((sector) => (
-                      <option key={sector} value={sector}>
-                        {sector}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="form-field">
-                  <span>Monthly income range</span>
+                  <span>Current employment status</span>
                   <select
-                    value={formValues.monthlyIncomeRange}
-                    onChange={updateField('monthlyIncomeRange')}
+                    value={formValues.currentEmploymentStatus}
+                    onChange={updateField('currentEmploymentStatus')}
                     required
                   >
-                    <option value="">Select range</option>
-                    {MONTHLY_INCOME_RANGES.map((range) => (
-                      <option key={range} value={range}>
-                        {range}
+                    <option value="">Select status</option>
+                    {EMPLOYMENT_STATUSES.map((status) => (
+                      <option key={status} value={status}>
+                        {status}
                       </option>
                     ))}
                   </select>
                 </label>
+                {isEmployedOrSelfEmployed ? (
+                  <>
+                    <label className="form-field">
+                      <span>Job title</span>
+                      <input
+                        type="text"
+                        placeholder="Enter job title"
+                        value={formValues.jobTitle}
+                        onChange={updateField('jobTitle')}
+                        required
+                      />
+                    </label>
+                    <label className="form-field">
+                      <span>Employer/sector</span>
+                      <select value={formValues.employerSector} onChange={updateField('employerSector')} required>
+                        <option value="">Select sector</option>
+                        {EMPLOYER_SECTORS.map((sector) => (
+                          <option key={sector} value={sector}>
+                            {sector}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="form-field">
+                      <span>Monthly income range</span>
+                      <select
+                        value={formValues.monthlyIncomeRange}
+                        onChange={updateField('monthlyIncomeRange')}
+                        required
+                      >
+                        <option value="">Select range</option>
+                        {MONTHLY_INCOME_RANGES.map((range) => (
+                          <option key={range} value={range}>
+                            {range}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </>
+                ) : null}
+                {isUnemployed ? (
+                  <label className="form-field">
+                    <span>Actively seeking work?</span>
+                    <select
+                      value={formValues.activelySeekingWork}
+                      onChange={updateField('activelySeekingWork')}
+                      required
+                    >
+                      <option value="">Select response</option>
+                      <option>Yes</option>
+                      <option>No</option>
+                    </select>
+                  </label>
+                ) : null}
               </>
-            ) : null}
-            {isUnemployed ? (
-              <label className="form-field">
-                <span>Actively seeking work?</span>
-                <select
-                  value={formValues.activelySeekingWork}
-                  onChange={updateField('activelySeekingWork')}
-                  required
-                >
-                  <option value="">Select response</option>
-                  <option>Yes</option>
-                  <option>No</option>
-                </select>
-              </label>
-            ) : null}
+            )}
             <label className="form-field">
               <span>Highest education level</span>
               <select value={formValues.educationLevel} onChange={updateField('educationLevel')}>
