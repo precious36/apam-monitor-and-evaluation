@@ -2473,6 +2473,8 @@ export default function Members({ session }) {
         <div className="filters-row">
           <input
             type="search"
+            name="member-search"
+            autoComplete="off"
             placeholder="Search members by name or ID"
             value={searchTerm}
             onChange={(event) => setSearchTerm(event.target.value)}
@@ -2832,7 +2834,8 @@ export default function Members({ session }) {
             <span>Admin password</span>
             <input
               type="password"
-              autoComplete="current-password"
+              name="member-delete-password-confirmation"
+              autoComplete="new-password"
               value={deletePassword}
               onChange={(event) => {
                 setDeletePassword(event.target.value)
