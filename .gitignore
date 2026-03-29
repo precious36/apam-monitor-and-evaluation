@@ -22,3 +22,9 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+docs/APAM-ME-System-Documentation-v2.pdf
+docs/APAM-ME-System-Documentation-v2.pdf
+docs/APAM-ME-System-Documentation-v3.pdf
+docs/APAM-ME-System-Documentation.md
+scripts/generate_system_documentation_pdf.py
+docs/APAM-ME-System-Documentation.pdf
