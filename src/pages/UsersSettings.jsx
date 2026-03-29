@@ -49,6 +49,22 @@ const getApiErrorMessage = (payload, status, fallbackMessage) => {
   return fallbackMessage
 }
 
+const getLoginErrorMessage = (payload, status, fallbackMessage) => {
+  if (payload?.errors?.length) {
+    return payload.errors[0]
+  }
+
+  if (payload?.message) {
+    return payload.message
+  }
+
+  if (status === 401) {
+    return 'Incorrect password. Please try again.'
+  }
+
+  return fallbackMessage
+}
+
 const isUserLocked = (user) => {
   if (!user?.lockoutEnd) {
     return false
@@ -110,6 +126,9 @@ export default function UsersSettings({ session }) {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [formMode, setFormMode] = useState('create')
   const [activeUser, setActiveUser] = useState(null)
+  const [deleteTargetUser, setDeleteTargetUser] = useState(null)
+  const [deletePassword, setDeletePassword] = useState('')
+  const [deleteError, setDeleteError] = useState('')
   const [formValues, setFormValues] = useState(() => createEmptyForm())
 
   const authHeader = useMemo(() => {
@@ -125,6 +144,12 @@ export default function UsersSettings({ session }) {
   const canCreateRoles = hasPermission(session, PERMISSIONS.ROLES_CREATE)
   const canDeleteRoles = hasPermission(session, PERMISSIONS.ROLES_DELETE)
   const canManageRolePermissions = hasPermission(session, PERMISSIONS.ROLES_MANAGE_PERMISSIONS)
+  const deleteAuthIdentifier = useMemo(() => {
+    const userName = String(session?.user?.userName ?? '').trim()
+    const email = String(session?.user?.email ?? '').trim()
+
+    return email || userName
+  }, [session?.user?.email, session?.user?.userName])
 
   const availableManagementTabs = useMemo(
     () =>
@@ -517,7 +542,18 @@ export default function UsersSettings({ session }) {
     }
   }, [authHeader, canUpdateUsers, loadUsersAndRoles, notify])
 
-  const handleDeleteUser = useCallback(async (user) => {
+  const closeDeleteUserModal = useCallback(() => {
+    const selectedUserId = deleteTargetUser?.userId
+    if (selectedUserId && pendingActionUserId === selectedUserId) {
+      return
+    }
+
+    setDeleteTargetUser(null)
+    setDeletePassword('')
+    setDeleteError('')
+  }, [deleteTargetUser?.userId, pendingActionUserId])
+
+  const openDeleteUserModal = useCallback((user) => {
     if (!canDeleteUsers) {
       notify.error('You do not have permission to delete users.')
       return
@@ -529,13 +565,56 @@ export default function UsersSettings({ session }) {
       return
     }
 
-    if (!window.confirm(`Delete ${userLabel}? This action cannot be undone.`)) {
+    setDeleteTargetUser({
+      ...user,
+      userLabel,
+    })
+    setDeletePassword('')
+    setDeleteError('')
+  }, [canDeleteUsers, notify])
+
+  const handleDeleteUser = useCallback(async () => {
+    const userId = deleteTargetUser?.userId
+    if (!userId) {
+      return
+    }
+
+    if (!deletePassword.trim()) {
+      setDeleteError('Enter your password to confirm deletion.')
+      return
+    }
+
+    if (!deleteAuthIdentifier) {
+      setDeleteError('Unable to verify your account. Please sign in again.')
       return
     }
 
     setPendingActionUserId(userId)
+    setDeleteError('')
 
     try {
+      const verifyResponse = await fetch(`${API_BASE_URL}/api/auth/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          emailOrUserName: deleteAuthIdentifier,
+          password: deletePassword,
+        }),
+      })
+
+      const verifyPayload = await verifyResponse.json().catch(() => null)
+      if (!verifyResponse.ok || !verifyPayload?.succeeded || !verifyPayload?.data?.accessToken) {
+        throw new Error(
+          getLoginErrorMessage(
+            verifyPayload,
+            verifyResponse.status,
+            'Unable to verify your password.',
+          ),
+        )
+      }
+
       const response = await fetch(`${API_BASE_URL}/api/users/${userId}`, {
         method: 'DELETE',
         headers: authHeader,
@@ -546,14 +625,25 @@ export default function UsersSettings({ session }) {
         throw new Error(getApiErrorMessage(payload, response.status, 'Failed to delete user.'))
       }
 
+      closeDeleteUserModal()
       await loadUsersAndRoles()
       notify.success('User deleted successfully.')
     } catch (error) {
-      notify.error(error instanceof Error ? error.message : 'Failed to delete user.')
+      const errorMessage = error instanceof Error ? error.message : 'Failed to delete user.'
+      setDeleteError(errorMessage)
+      notify.error(errorMessage)
     } finally {
       setPendingActionUserId('')
     }
-  }, [authHeader, canDeleteUsers, loadUsersAndRoles, notify])
+  }, [
+    authHeader,
+    closeDeleteUserModal,
+    deleteAuthIdentifier,
+    deletePassword,
+    deleteTargetUser?.userId,
+    loadUsersAndRoles,
+    notify,
+  ])
 
   const handleCreateRole = useCallback(async () => {
     if (!canCreateRoles) {
@@ -799,7 +889,7 @@ export default function UsersSettings({ session }) {
                 <Button
                   variant="danger"
                   size="sm"
-                  onClick={() => handleDeleteUser(row.source)}
+                  onClick={() => openDeleteUserModal(row.source)}
                   disabled={isActionBusy || isSaving}
                 >
                   Delete
@@ -810,7 +900,15 @@ export default function UsersSettings({ session }) {
         },
       },
     ],
-    [canDeleteUsers, canUpdateUsers, handleDeleteUser, handleLockToggle, isSaving, openEditModal, pendingActionUserId],
+    [
+      canDeleteUsers,
+      canUpdateUsers,
+      handleLockToggle,
+      isSaving,
+      openDeleteUserModal,
+      openEditModal,
+      pendingActionUserId,
+    ],
   )
 
   const totalUsers = users.length
@@ -1222,6 +1320,53 @@ export default function UsersSettings({ session }) {
               </div>
             )}
           </div>
+        </div>
+      </Modal>
+
+      <Modal
+        open={Boolean(deleteTargetUser)}
+        title="Delete user"
+        subtitle="Are you sure you want to delete this user?"
+        onClose={closeDeleteUserModal}
+        footer={
+          <div className="modal-actions modal-actions-split">
+            <Button
+              variant="ghost"
+              onClick={closeDeleteUserModal}
+              disabled={pendingActionUserId === deleteTargetUser?.userId}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              onClick={handleDeleteUser}
+              disabled={!deleteTargetUser?.userId || pendingActionUserId === deleteTargetUser?.userId}
+            >
+              {pendingActionUserId === deleteTargetUser?.userId ? 'Deleting...' : 'Confirm and delete'}
+            </Button>
+          </div>
+        }
+      >
+        {deleteError ? <p className="alert">{deleteError}</p> : null}
+        <div className="form-grid">
+          <p className="table-meta">
+            You are deleting <strong>{deleteTargetUser?.userLabel ?? 'this user'}</strong>. This action cannot be undone.
+          </p>
+          <label className="form-field form-field-full">
+            <span>Admin password</span>
+            <input
+              type="password"
+              autoComplete="current-password"
+              value={deletePassword}
+              onChange={(event) => {
+                setDeletePassword(event.target.value)
+                if (deleteError) {
+                  setDeleteError('')
+                }
+              }}
+              placeholder="Enter your password to confirm deletion"
+            />
+          </label>
         </div>
       </Modal>
     </div>
