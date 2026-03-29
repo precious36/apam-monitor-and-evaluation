@@ -1015,6 +1015,8 @@ export default function UsersSettings({ session }) {
             <div className="filters-row">
               <input
                 type="search"
+                name="user-search"
+                autoComplete="off"
                 placeholder="Search by username, email, or role"
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
@@ -1356,7 +1358,8 @@ export default function UsersSettings({ session }) {
             <span>Admin password</span>
             <input
               type="password"
-              autoComplete="current-password"
+              name="user-delete-password-confirmation"
+              autoComplete="new-password"
               value={deletePassword}
               onChange={(event) => {
                 setDeletePassword(event.target.value)
