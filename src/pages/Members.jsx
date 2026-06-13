@@ -254,11 +254,12 @@ const EXPORT_COLUMNS = [
   { key: 'memberCode', label: 'Member Code' },
   { key: 'fullName', label: 'Full Name' },
   { key: 'district', label: 'District' },
+  { key: 'traditionalAuthority', label: 'Traditional Authority' },
+  { key: 'village', label: 'Village' },
+  { key: 'phoneNumber', label: 'Phone Number' },
   { key: 'gender', label: 'Gender' },
   { key: 'age', label: 'Age' },
-  { key: 'ageGroup', label: 'Age Group' },
   { key: 'education', label: 'Education Level' },
-  { key: 'employmentStatus', label: 'Employment Status' },
 ]
 
 const formatMemberCode = (memberId) => {
@@ -485,6 +486,41 @@ const triggerDownload = (content, mimeType, filename) => {
   anchor.click()
   anchor.remove()
   URL.revokeObjectURL(url)
+}
+
+const printExportDocument = (title, rows) => {
+  const iframe = document.createElement('iframe')
+  iframe.setAttribute('title', 'Member export print preview')
+  iframe.setAttribute(
+    'style',
+    'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden',
+  )
+  document.body.append(iframe)
+
+  const printWindow = iframe.contentWindow
+  const printDocument = printWindow?.document
+  if (!printWindow || !printDocument) {
+    iframe.remove()
+    return false
+  }
+
+  printDocument.open()
+  printDocument.write(buildExportHtmlDocument(title, rows))
+  printDocument.close()
+
+  const cleanup = () => {
+    iframe.remove()
+  }
+
+  printWindow.addEventListener('afterprint', cleanup, { once: true })
+  window.setTimeout(cleanup, 60000)
+
+  printWindow.focus()
+  window.setTimeout(() => {
+    printWindow.print()
+  }, 250)
+
+  return true
 }
 
 export default function Members({ session }) {
@@ -776,11 +812,12 @@ export default function Members({ session }) {
         memberCode: row.id ?? '',
         fullName: row.name ?? '',
         district: row.district ?? '',
+        traditionalAuthority: row.source?.traditionalAuthority ?? '',
+        village: row.source?.villageArea ?? '',
+        phoneNumber: row.source?.phoneNumber ?? '',
         gender: row.gender ?? '',
         age: row.age ?? '',
-        ageGroup: row.ageGroup ?? '',
         education: row.education ?? '',
-        employmentStatus: row.status ?? '',
       })),
     [sortedRows],
   )
@@ -835,21 +872,14 @@ export default function Members({ session }) {
       return
     }
 
-    const printWindow = window.open('', '_blank', 'noopener,noreferrer')
-    if (!printWindow) {
-      const errorMessage = 'Popup was blocked. Allow popups to export as PDF.'
+    const printStarted = printExportDocument(title, exportRows)
+    if (!printStarted) {
+      const errorMessage = 'Unable to open the print dialog for PDF export. Please try again.'
       setExportError(errorMessage)
       notify.error(errorMessage)
       return
     }
 
-    printWindow.document.open()
-    printWindow.document.write(buildExportHtmlDocument(title, exportRows))
-    printWindow.document.close()
-    printWindow.focus()
-    setTimeout(() => {
-      printWindow.print()
-    }, 300)
     closeExportModal()
     notify.success('Print dialog opened for PDF export.')
   }
